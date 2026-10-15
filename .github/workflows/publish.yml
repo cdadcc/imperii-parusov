@@ -1,0 +1,48 @@
+name: Publish Imperii Parusov
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site.zip"
+      - ".github/workflows/publish.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Extract game site and verify contents
+        run: |
+          test -f site.zip
+          mkdir -p public
+          unzip -q site.zip -d public
+          test -s public/index.html
+          test -s public/scripts/game.js
+          test -s public/scripts/geography.js
+          test -s public/styles.css
+          test -d public/assets/images
+          echo "Game files are present."
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+      - name: Deploy site
+        id: deployment
+        uses: actions/deploy-pages@v4
