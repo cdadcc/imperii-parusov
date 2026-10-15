@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "site.zip"
+      - "source-parts/**"
       - ".github/workflows/publish.yml"
   workflow_dispatch:
 
@@ -26,21 +26,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Extract game site and verify contents
+      - name: Assemble original XXVII and verify SHA-256
+        shell: bash
         run: |
-          test -f site.zip
+          set -euo pipefail
           mkdir -p public
-          unzip -q site.zip -d public
+          count=$(find source-parts -maxdepth 1 -name 'part-*.txt' -type f | wc -l)
+          test "$count" -eq 26
+          cat source-parts/part-*.txt > public/index.html
+          echo "16f929033c537c2291776316ae392dde94cb2f8c6c059c307dec66099521fbc3  public/index.html" | sha256sum -c -
           test -s public/index.html
-          test -s public/scripts/game.js
-          test -s public/scripts/geography.js
-          test -s public/styles.css
-          test -d public/assets/images
-          echo "Game files are present."
+          echo "Source XXVII verified; size $(wc -c < public/index.html) bytes"
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
