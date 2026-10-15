@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "source-parts/**"
+      - "site.zip"
+      - "game-v27/**"
       - ".github/workflows/publish.yml"
   workflow_dispatch:
 
@@ -26,19 +27,27 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Assemble original XXVII and verify SHA-256
-        shell: bash
+      - name: Reconstruct and verify game
         run: |
-          set -euo pipefail
           mkdir -p public
-          count=$(find source-parts -maxdepth 1 -name 'part-*.txt' -type f | wc -l)
-          test "$count" -eq 26
-          cat source-parts/part-*.txt > public/index.html
-          echo "16f929033c537c2291776316ae392dde94cb2f8c6c059c307dec66099521fbc3  public/index.html" | sha256sum -c -
-          test -s public/index.html
-          echo "Source XXVII verified; size $(wc -c < public/index.html) bytes"
+          if [ -d game-v27 ]; then
+            test "$(find game-v27 -maxdepth 1 -name 'part-*.html' | wc -l)" -eq 24
+            cat game-v27/part-*.html > public/index.html
+            echo "16f929033c537c2291776316ae392dde94cb2f8c6c059c307dec66099521fbc3  public/index.html" | sha256sum -c -
+            echo 'XXVII deployed with verified original contents.'
+          else
+            unzip -q site.zip -d public
+            test -s public/index.html
+            test -s public/scripts/game.js
+            test -s public/scripts/geography.js
+            test -s public/styles.css
+            test -d public/assets/images
+          fi
+          touch public/.nojekyll
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:

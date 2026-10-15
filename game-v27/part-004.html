@@ -1,0 +1,1000 @@
+ ['v15_blockade','Школа дальней блокады','Флот',['convoys'],6,220,{navalPower:1.06,trade:1.04}],
+ ['v15_marine','Десантные роты и баркасы','Флот',['navigation'],5,205,{armyCost:.96,navalPower:1.04}],
+ ['v15_grammar','Школы навигации и геометрии','Образование',['academies'],4,180,{research:1.08,education:1.08}],
+ ['v15_science','Точные измерения и стандарты','Образование',['v15_grammar'],5,220,{research:1.10,arsenalSpeed:1.06}],
+ ['v15_copper','Медная обшивка второго поколения','Кораблестроение',['coppering'],6,225,{shipSpeed:1.08,shipTime:.97}],
+ ['v15_fieldcannon','Подвижные артиллерийские парки','Артиллерия и осады',['artillery'],5,195,{artillery:1.09,armySpeed:1.04}]
+];
+const V15_NEW_EFFECTS = Object.fromEntries(V15_RESEARCH.map(z=>[z[0],z[6]]));
+for(const [id,name,cat,req,time,cost,mods] of V15_RESEARCH){
+  if(!TECH.some(t=>t.id===id)) TECH.push({id,name,cat,req,time,cost,eduMin:30+Math.round(time*2),desc:Object.entries(mods).map(([k,v])=>`${BONUS_NAMES[k]||k} ${v<1?'−':'+'}${Math.round(Math.abs(v-1)*100)}%`).join(' · ')});
+}
+Object.assign(BONUS_NAMES,{arsenalSpeed:'Скорость вооружения',arsenalCost:'Себестоимость оружия',gunCost:'Стоимость орудий',gunDamage:'Урон корабельных пушек',gunReload:'Скорость перезарядки',gunAccuracy:'Точность орудий',supply:'Обеспечение армии',armySpeed:'Скорость похода',shipHull:'Прочность кораблей',shipSpeed:'Скорость кораблей'});
+const v15PreviousGlobalMod=globalMod;
+globalMod=function(f,k){let x=v15PreviousGlobalMod(f,k);for(const id of s?.tech?.[f]||[]){if(V15_NEW_EFFECTS[id]?.[k]!==undefined)x*=V15_NEW_EFFECTS[id][k]}return x};
+
+function v15Hash(text){let h=2166136261;for(const ch of String(text)){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+function v15Random(seed){let s=seed>>>0;return()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296}}
+function v15Portrait(name,role,kind='court'){
+ const r=v15Random(v15Hash(name+'|'+role));let wig=Math.floor(r()*4),coat=['#762f34','#2e4a65','#6c633a','#376054','#63507a'][Math.floor(r()*5)],skin=['#dbac88','#edc59f','#c59170','#e5b996'][Math.floor(r()*4)],eyes=90+Math.floor(r()*5),jaw=148+Math.floor(r()*10),hat=r()>.65, beard=r()>.75;
+ const hair=wig===0?'#bdb7a7':wig===1?'#d4cbc0':wig===2?'#8f8683':'#e6d9c3';
+ const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 220"><defs><linearGradient id="b" x2=".5" y2="1"><stop stop-color="#425568"/><stop offset="1" stop-color="#141b24"/></linearGradient></defs><rect width="180" height="220" fill="url(#b)"/><path d="M10 212 Q24 149 65 151 L115 151 Q162 155 170 212Z" fill="${coat}" stroke="#bd9a61" stroke-width="2"/><path d="M71 154 L90 193 L110 154 L100 222 L80 222Z" fill="#f2e8d9"/><ellipse cx="90" cy="103" rx="42" ry="55" fill="${skin}"/><path d="M46 100 Q40 36 87 32 Q133 24 137 94 Q124 64 117 68 Q92 79 56 75Z" fill="${hair}"/><path d="M47 81 Q35 103 43 132 Q48 146 54 129 L59 78 M133 78 L137 132 Q145 146 150 119 L143 72" fill="${hair}" stroke="#706b65" stroke-width="1.2"/><path d="M64 ${eyes}l16 0 M101 ${eyes}l16 0" stroke="#735943" stroke-width="2"/><circle cx="73" cy="${eyes+6}" r="3" fill="#28313a"/><circle cx="109" cy="${eyes+6}" r="3" fill="#28313a"/><path d="M88 100q-5 12-3 20l8 0" stroke="#a77b5c" fill="none" stroke-width="2"/><path d="M75 ${jaw}q16 8 31 0" stroke="#7b4b42" fill="none" stroke-width="2"/>${beard?'<path d="M65 143 Q80 180 99 172 Q115 168 119 143 Q91 156 65 143Z" fill="#a6a099" opacity=".9"/>':''}${hat?'<path d="M25 74 Q90 45 155 74 L135 51 L112 26 L62 26 L45 51Z" fill="#272b32" stroke="#c4a36a" stroke-width="2"/>':''}<path d="M18 207h144" stroke="#c7a16a" stroke-width="3"/></svg>`;
+ return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg);
+}
+const V15_PEOPLE={};for(const n of NATIONAL)V15_PEOPLE[n.ruler]=v15Portrait(n.ruler,n.title);for(const a of ADVISERS)V15_PEOPLE[a.id]=v15Portrait(a.name,a.role);for(const a of V6_ADMIRALS)V15_PEOPLE[a.name]=v15Portrait(a.name,'Адмирал','navy');
+
+function v15Get(){if(!s)return null;s.v15 ||= {training:[],unlocked:[],next:1,created:15};return s.v15}
+function v15Regiments(i){let p=s.provinces[i];p.v15Regiments ||= [];if(p.owner!==s.player)return p.v15Regiments;
+ if(!p.v15Initialized){const keys=['inf','lineinf','fusiliers','militia','lightinf','grenadiers','guards','cav','dragoons','hussars','cuirassiers','art','lightart','heavyart'];for(const key of keys){let n=Math.min(6,countUnit(p,key));for(let j=0;j<n;j++)p.v15Regiments.push({id:++v15Get().next,type:key,headcount:(REGIMENTS[key]?.type==='Артиллерия'?120:REGIMENTS[key]?.type==='Конница'?500:800),name:`${p.v15Regiments.length+1}-й ${REGIMENTS[key]?.label||'полк'}`,experience:0,training:0,weapon:null,gearCount:0,morale:p.morale||70});}p.v15Initialized=true;}return p.v15Regiments;}
+function v15SelectedReg(){let r=v15Regiments(selected);return r.find(x=>x.id===v15RegId)||r[0]}
+let v15RegId=null,v15Tab='regiments';
+function v15Equip(regId,equip){const p=s.provinces[selected],r=v15Regiments(selected).find(x=>x.id===regId);if(!r||!own(selected))return;
+ if(equip!==''&&(!V6_EQUIP[equip]||V6_EQUIP[equip].tech&&!has(s.player,V6_EQUIP[equip].tech)))return say('Требуется соответствующее исследование');
+ const inventory=s.equipment[s.player],qty=equip===''?0:((equip.startsWith('gun')?2:120));
+ if((inventory[equip]||0)<qty)return say('Недостаточно предметов на складе — назначьте мануфактуры в Производстве');
+ if(r.weapon){inventory[r.weapon]=(inventory[r.weapon]||0)+(r.gearCount||0)}
+ if(equip)inventory[equip]-=qty;r.weapon=equip||null;r.gearCount=qty;r.experience=Math.max(0,r.experience-1);
+ log(`${r.name}: новое оснащение ${equip?V6_EQUIP[equip].name:'штатное'}.`);v15Render();drawAll();}
+function v15Train(regId){let r=v15Regiments(selected).find(x=>x.id===regId),v=v15Get();if(!r)return;
+ if(v.training.some(x=>x.regId===regId&&x.i===selected))return say('Полк уже на учениях');
+ if(s.gold[s.player]<18||s.food[s.player]<3||(s.equipment[s.player].gunpowder||0)<1)return say('Для подготовки нужны 18 монет, 3 провианта и 1 единица пороха');
+ s.gold[s.player]-=18;s.food[s.player]-=3;s.equipment[s.player].gunpowder-=1;
+ v.training.push({i:selected,regId,remaining:21});log(`${r.name}: начаты полковые учения (21 день).`);v15Render();drawAll();}
+const v15PreviousAdvanceDay=advanceDay;
+advanceDay=function(){v15PreviousAdvanceDay();if(!s||s.ended)return;const v=v15Get();for(const t of v.training){t.remaining--;if(t.remaining<=0){const r=s.provinces[t.i]?.v15Regiments?.find(x=>x.id===t.regId);if(r){r.experience=Math.min(100,r.experience+12);r.training=Math.min(100,r.training+8);r.morale=Math.min(100,r.morale+5);if(s.provinces[t.i].owner===s.player)log(`${r.name}: учебный сбор окончен. Опыт +12, подготовка +8.`)}}}v.training=v.training.filter(x=>x.remaining>0)};
+const v15PreviousPower=power;
+power=function(p,f,attack=false,where=0){let val=v15PreviousPower(p,f,attack,where);if(p?.v15Regiments?.length){let troops=p.v15Regiments;let mul=troops.reduce((a,r)=>a+(r.experience/100)*.12+(r.training/100)*.09+(r.weapon?((r.weapon.startsWith('gun')?.085:.05))*Math.min(1,(r.gearCount||0)/Math.max(1,r.headcount||800)):0),0)/Math.max(1,troops.length);val*=1+Math.min(.28,mul);}return val};
+
+const v15PreviousShipMesh=v8shipMesh;
+v8shipMesh=function(type='frigate',design=null){let base=v15PreviousShipMesh(type,design),seed=design?.modelSeed??v15Hash((design?.name||type)+'|'+(design?.id||0)),rng=v15Random(seed);let size=type==='line'?1.55:type==='frigate'?1.1:type==='transport'?1.16:.82,L=11*size,W=(type==='line'?3.4:2.8)*size;
+ // Детерминированная генерация кормы, вымпелов, галерей и декоративных надстроек.
+ const accent=['#bc9a5b','#aeb9bc','#946847','#c0a66d'][Math.floor(rng()*4)],rake=.3+rng()*.6;
+ for(const side of [-1,1]){for(let j=0;j<4;j++){let xx=-L*.38+j*L*.25;v8seg(base,[xx,side*W*.4,.32*size],[xx,side*W*.4,(.45+rng()*.12)*size],accent,1);}}
+ v8cube(base,-L*.46,0,.60*size,L*.08,W*.63,.25*size,accent);
+ for(let i=0;i<(type==='line'?5:3);i++){const yy=(i-(type==='line'?2:1))*W*.10;v8cube(base,-L*.51,yy,.64*size,.12*size,.07*size,.15*size,'#25343c');}
+ for(let j=0;j<2;j++){let x=(j===0?-.16:.22)*L;v8seg(base,[x,0,(6.9+j)*size],[x+(j===0?-1:1)*rake*size,0,(7.6+j)*size],accent,1.2)}
+ v8cube(base,L*.42,0,.60*size,L*.10,W*.48,.17*size,accent);
+ // Гальюнная носовая решётка и оснастка, варьирующиеся по проекту.
+ for(let j=0;j<4;j++){v8seg(base,[L*.43,(-.23+j*.15)*W,.22*size],[L*.6,(-.20+j*.13)*W,-.05*size],'#9d855f',.8)}
+ return base;};
+const v15PreviousMeshFor=v8meshFor;
+v8meshFor=function(e){if(e.kind==='ship'){const sid=e.shipId||e.design?.id||e.id;const sd=v15Hash(String(sid)+'|'+(e.design?.name||e.type));e.design={...(e.design||{}),modelSeed:sd,batteries:e.design?.batteries||[]};e.meshKey='v15-'+e.type+'-'+sd+'-'+e.design.batteries.map(b=>b.gun+b.count).join('-')}return v15PreviousMeshFor(e)};
+const v15OldCannon=v8cannon3d;
+v8cannon3d=function(m,x,y,z,lb=12,side=1,scale=1){v15OldCannon(m,x,y,z,lb,side,scale);let sc=scale*(.6+lb/42*.55),r=(.045+lb*.0016)*scale;
+ // Цапфы, медные обоймы, подкосы лафета, оси колёс.
+ v8cylinder(m,[x,y,z+.045*sc],[x,y+side*.16*sc,z+.045*sc],r*1.12,'#bd9a60',10);
+ v8cube(m,x,y,z-.15*sc,.46*sc,.50*sc,.08*sc,'#60472e');
+ for(const dx of [-1,1])v8seg(m,[x+dx*.19*sc,y-.2*sc,z-.17*sc],[x+dx*.19*sc,y+.2*sc,z-.17*sc],'#332922',1.2)
+};
+
+
+// Исследования снабжения, артиллерийской точности и скорости марша участвуют в расчёте.
+const v15OldSupplyOf=v8supplyOf;
+v8supplyOf=function(i){let q=v15OldSupplyOf(i);let f=s.provinces[i]?.owner;if(Number.isInteger(f))q=Math.min(100,q*globalMod(f,'supply'));return q};
+const v15OldTravelDays=travelDays;
+travelDays=function(from,to,force,f){return Math.max(4,Math.round(v15OldTravelDays(from,to,force,f)/globalMod(f,'armySpeed')))};
+const v15OldShipPower=v6shipPower;
+v6shipPower=function(sh,admiralIndex){return v15OldShipPower(sh,admiralIndex)*globalMod(sh.f,'gunAccuracy')};
+const v15OldShowModel=v8ShowModel;
+v8ShowModel=function(shipId){v15OldShowModel(shipId);if(V8_SCENE?.units?.[0]){V8_SCENE.units[0].shipId=shipId;V8_SCENE.units[0].meshKey=null}};
+
+// Морская артиллерия XV: дальность, борт, масса залпа, сопротивление корпуса и перезарядка.
+function v15CannonStats(c,f=0){return {damage:c.atk*globalMod(f,'gunDamage'),penetration:c.lb*(globalMod(f,'gunAccuracy')||1),range:c.range,reload:Math.max(1.5,4.7*c.reload/Math.max(.5,globalMod(f,'gunReload')))}}
+const v15PreviousFire=v8fire;
+v8fire=function(u){let sc=V8_SCENE;if(!sc||sc.kind!=='sea'||u.kind!=='ship')return v15PreviousFire(u);
+ if(u.hp<=0||u.cooldown>0)return;
+ const nearest=sc.units.filter(z=>z.team!==u.team&&z.hp>0).sort((a,b)=>Math.hypot(u.pos[0]-a.pos[0],u.pos[1]-a.pos[1])-Math.hypot(u.pos[0]-b.pos[0],u.pos[1]-b.pos[1]))[0];if(!nearest)return;
+ const batt=u.design?.batteries?.filter(z=>z.count>0)||[];const guns=batt.map(row=>({c:CANNONS.find(c=>c.id===row.gun)||CANNONS[0],count:row.count||0}));const total=guns.reduce((a,b)=>a+b.count,0);
+ if(!total)return v15PreviousFire(u);
+ const d=Math.hypot(u.pos[0]-nearest.pos[0],u.pos[1]-nearest.pos[1]);const maxRange=guns.reduce((a,g)=>Math.max(a,g.c.range),0)/12;
+ if(d>maxRange)return;
+ const angle=Math.atan2(nearest.pos[1]-u.pos[1],nearest.pos[0]-u.pos[0]);const bearing=Math.abs(Math.atan2(Math.sin(angle-u.angle),Math.cos(angle-u.angle)));
+ if(!(bearing>Math.PI*.19&&bearing<Math.PI*.88))return;
+ if(u.ammo===undefined)u.ammo=100;if(u.ammo<1)return;
+ const weightedReload=guns.reduce((a,g)=>a+g.c.reload*g.count,0)/total;
+ const power=guns.reduce((a,g)=>a+g.c.atk*g.count/2,0);
+ const penetration=guns.reduce((a,g)=>a+g.c.lb*g.count,0)/total;
+ const armor=(nearest.type==='line'?25:nearest.type==='frigate'?15:nearest.type==='transport'?6:9)*Math.max(.6,nearest.hp/Math.max(1,nearest.maxHp||nearest.hp));
+ const penFactor=Math.min(1.25,Math.max(.3,penetration/Math.max(1,armor)));
+ const crewRatio=(u.shipId?s.ships.find(x=>x.id===u.shipId)?.crew/(s.ships.find(x=>x.id===u.shipId)?.crewMax||1):1)||.75;
+ const accuracy=Math.max(.12,(1-d/(maxRange*1.4))*(.70+Math.random()*.3));
+ const hit=Math.max(.5,power*.16*penFactor*accuracy*Math.max(.3,crewRatio));
+ nearest.hp=Math.max(0,nearest.hp-hit);u.cooldown=Math.max(2.2,weightedReload*4.8/Math.max(.55,globalMod(u.team==='friendly'?s.player:(nearest.shipId?s.ships.find(x=>x.id===nearest.shipId)?.f||0:0),'gunReload')));
+ u.ammo-=1;sc.smoke ||= [];for(let i=0;i<9;i++)sc.smoke.push({x:u.pos[0]+Math.random()*2,y:u.pos[1]+Math.random()*2,z:1+Math.random()*2,age:0});
+ if(u.team==='friendly'&&v8Battle)v8Battle.lastHit=`${u.name} → ${nearest.name}: ${Math.round(hit)} HP · пробитие ${Math.round(penFactor*100)}%`;
+};
+const v15PreviousFinish3DBattle=v8finish3dBattle;
+v8finish3dBattle=function(won){if(v8Battle?.campaign&&V8_SCENE){for(const u of V8_SCENE.units||[]){if(u.shipId){const sh=s.ships.find(x=>x.id===u.shipId);if(sh)sh.ammo=Math.min(sh.ammo??100,u.ammo??100)}}}return v15PreviousFinish3DBattle(won)};
+// Точные статистические значения у старой части дерева без фиктивных бонусов.
+const V15_LEGACY_EFFECTS={
+ flintlock:{infAttack:1.12},rankfire:{infAttack:1.12},platoonfire:{infAttack:1.12},
+ shipyards:{shipCost:.82},professional_army:{infAttack:1.08},
+ conscription:{armyCost:.87},rifling:{infAttack:1.08},
+ blockandpulleys:{shipTime:.90},drydock:{shipTime:.89},portinspections:{shipTime:.85},
+ studss:{armySpeed:1.04},academies:{research:1.13},
+ v15_rifles:V15_NEW_EFFECTS.v15_rifles
+};
+if(typeof v14techEffects==='function'){
+ v14techEffects=function(t){let mods=V15_NEW_EFFECTS[t.id]||V15_LEGACY_EFFECTS[t.id];
+  if(!mods)return `<div class="v14-eff"><span>${esc(t.desc||'Открывает новый этап развития')}</span><b>Эффект базовой системы</b></div>`;
+  return Object.entries(mods).map(([k,v])=>`<div class="v14-eff"><span>${esc(BONUS_NAMES[k]||k)}</span><b>${v<1?'−':'+'}${Math.round(Math.abs(1-v)*100)}%</b></div>`).join('')};
+}
+if(typeof v14Cannon==='function'){
+ v14Cannon=function(c){let q=v15CannonStats(c,s?.player||0),prod=V6_EQUIP[c.id]?.work||c.lb;
+  const bar=(label,val,max,color,txt)=>v14bar(label,val,max,color,txt);
+  return `<div class="v14-cannoncard"><img src="${typeof V6_ART!=='undefined'&&(V6_ART[c.id]||V6_ART.cannon)||''}" alt="${c.lb}"><div class="v14-c-head"><h4>${c.lb}-фунтовая корабельная пушка</h4><small>Игровые характеристики конкретного образца</small></div>${bar('Мощность',q.damage,8,'#77ac87',q.damage.toFixed(1))}${bar('Пробитие',q.penetration,45,'#ceb074',q.penetration.toFixed(1))}${bar('Дальность',q.range,900,'#6fabc6',q.range+' м')}${bar('Перезарядка',Math.max(1,100-q.reload*7),100,'#bf7a70',q.reload.toFixed(1)+' с')}${bar('Трудозатраты',prod,48,'#989797',prod+' ед.')}</div>`;
+ }
+}
+
+const v15OldComputerTurn=computerTurn;
+computerTurn=function(){v15OldComputerTurn(); // Additional deterministic economic choices, based on shortages and threats.
+ for(let f=0;f<F.length;f++){if(f===s.player)continue;const provs=regOf(f);if(!provs.length)continue;
+ const enemy=provs.some(({i})=>N[i].adj.some(j=>withWar(f,s.provinces[j].owner)));
+ const wantFarm=s.food[f]<Math.max(35,provs.length*.35),wantFoundry=s.iron[f]<Math.max(20,provs.length*.14);
+ let best=null,score=-Infinity;for(const {i,p} of provs){let q=(wantFarm?5-p.farm:wantFoundry?4-p.workshop:3-p.market)+(p.road||0)*.5-(p.unrest||0)*.015;if(enemy&&N[i].adj.some(j=>withWar(f,s.provinces[j].owner)))q-=2;if(q>score){score=q;best=p}}
+ if(best&&s.gold[f]>135&&s.wood[f]>25){if(wantFarm&&best.farm<5){best.farm++;s.gold[f]-=75;s.wood[f]-=20}else if(wantFoundry&&best.workshop<5&&s.iron[f]>5){best.workshop++;s.gold[f]-=115;s.wood[f]-=24;s.iron[f]-=5}else if(enemy&&best.depot<2){best.depot++;s.gold[f]-=100;s.wood[f]-=22}}
+ }
+};
+/* XV — Графический штаб и насыщенный экран кампании. */
+let v15OverlayTab='fleet',v15ShipId=null,v15NewPortraitIndex=0;
+function v15Gauge(label,n,max,color='#8cae9d',format=''){let v=Math.max(0,Math.min(100,n/Math.max(1,max)*100));return `<div class="v15-gauge"><span>${label}</span><i><b style="width:${v.toFixed(1)}%;background:${color}"></b></i><strong>${format||Math.round(n)}</strong></div>`}
+function v15StateLabels(r){const u=REGIMENTS[r.type]||REGIMENTS.inf;const atk=u.atk*(1+r.training*.0009+r.experience*.0012+(r.weapon?.startsWith('gun')?.09:r.weapon?.includes('sabre')?.07:r.weapon?.includes('musket')?.05:0));return [atk,u.def*(1+r.experience*.001),u.speed,r.morale||70]}
+function v15Header(){let f=s.player;return `<div class="v15-h-header"><div><small>КОРОЛЕВСКИЙ ШТАБ · ${dateLabel()}</small><h2>${F[f].name}</h2></div><nav>${[['fleet','Адмиралтейство'],['regiments','Полки и снаряжение'],['research','Доктрины'],['industry','Промышленность']].map(([k,n])=>`<button class="${v15OverlayTab===k?'on':''}" onclick="v15Switch('${k}')">${n}</button>`).join('')}</nav><button class="v15-close" onclick="v15Close()">✕</button></div>`}
+function v15ShipPanel(){let fleets=(s.fleets||[]).filter(x=>x.f===s.player),ships=(s.ships||[]).filter(x=>x.f===s.player),sh=ships.find(x=>x.id===v15ShipId)||ships[0];v15ShipId=sh?.id||null;
+ let fleet=sh?fleets.find(x=>x.id===sh.fleetId):null,st=sh?v6designStats({...sh.design,f:sh.f}):null;
+ const cards=ships.slice(0,32).map(z=>{let stats=v6designStats({...z.design,f:z.f}),kind=V6_HULLS[z.type]?.label||z.type;return `<button class="v15-shiptile ${sh?.id===z.id?'selected':''}" onclick="v15ShipId=${z.id};v15Render()"><img src="${(typeof V6_ART!=='undefined'&&(V6_ART[V6_HULLS[z.type]?.art]||V6_ART.ship))||''}" alt=""><div><b>${esc(z.name)}</b><small>${esc(kind)} · ${stats.guns} орудий</small>${v15Gauge('Корпус',z.hp,z.maxHp,'#9dba94',Math.round(100*z.hp/z.maxHp)+'%')}</div></button>`}).join('');
+ let batteries=sh?.design?.batteries||[];
+ return `<div class="v15-docklayout"><aside class="v15-docklist"><h3>Личный состав эскадр <small>${fleets.length} эскадр · ${ships.length} кораблей</small></h3>${cards||'<p>Корабли отсутствуют. Создайте проект и заложите его на верфи.</p>'}<button class="v15-main" onclick="v15Close();v8open('fleet')">Эскадры и операции ↗</button></aside><section class="v15-dockhero">${sh?`<div class="v15-shiptitle"><h3>${esc(sh.name)}</h3><span>${esc(V6_HULLS[sh.type]?.label||sh.type)}</span></div><div class="v15-shipimage"><img src="${(typeof V6_ART!=='undefined'&&(V6_ART[V6_HULLS[sh.type]?.art]||V6_ART.ship))||''}" alt=""><div><strong>${st.guns} орудий</strong><strong>${st.speed.toFixed(1)} узлов</strong><strong>${sh.crew}/${sh.crewMax} человек</strong></div></div><div class="v15-shipactions"><button class="v15-main" onclick="v15Close();v8ShowModel(${sh.id})">Открыть 3D-модель ↗</button><button onclick="v15Close();tab='fleet';v6FleetPage='designer';drawAll()">Редактировать проекты</button><button onclick="v15Close();v8open('fleet')">Управление эскадрой</button></div>${v15Gauge('Корпус',sh.hp,sh.maxHp,'#9dba94',Math.round(sh.hp/sh.maxHp*100)+'%')}${v15Gauge('Экипаж',sh.crew,sh.crewMax,'#bda270')}${v15Gauge('Боекомплект',sh.ammo||0,100,'#83b2cb')}${v15Gauge('Опыт',sh.experience||0,100,'#c89c70')}<h3>Орудийные палубы</h3><div class="v15-batteries">${batteries.map((row,i)=>`<div><img src="${(typeof V6_ART!=='undefined'&&(V6_ART[row.gun]||V6_ART.cannon))||''}" alt=""><span>${esc(V6_HULLS[sh.type]?.decks[i]?.name||'Батарея')}</span><b>${row.count} × ${row.gun.replace('gun','')}-фн</b></div>`).join('')}</div><p>Процедурная 3D-модель имеет собственный генерируемый силуэт кормы и декоративные детали. Калибры и число пушек берутся из настоящего проекта корабля.</p>`:'<h3>Корабли ещё не построены</h3><p>Создайте индивидуальный проект, произведите орудия и заложите судно на верфи.</p>'}</section></div>`}
+function v15RegPanel(){const entries=v15Regiments(selected),r=v15SelectedReg(),f=s.player,p=s.provinces[selected];if(r&&!v15RegId)v15RegId=r.id;
+ const categories=[['musket','Кремнёвый мушкет'],['bayonet','Штыки'],['sabre1700','Палаш 1700'],['cavalrySabre','Кавалерийская сабля'],['gun4','4-фунтовая батарея'],['gun6','6-фунтовая батарея'],['gun12','12-фунтовая батарея']];
+ const art=n=>(typeof V6_ART!=='undefined'&&(V6_ART[n]||V6_ART[V6_EQUIP[n]?.art]||V6_ART.infantry))||'';
+ return `<div class="v15-reglayout"><aside class="v15-reglist"><h3>Учебные лагеря · ${esc(N[selected].name)}</h3><small>Действующие полки в выбранной провинции</small>${entries.slice(0,30).map(z=>`<button class="v15-regtile ${r?.id===z.id?'selected':''}" onclick="v15RegId=${z.id};v15Render()"><img src="${art(z.weapon||'musket')}" alt=""><span><b>${esc(z.name)}</b><small>${esc(REGIMENTS[z.type]?.type||'Пехота')} · опыт ${z.experience}</small></span></button>`).join('')||'<p>В этой провинции нет полков. Наберите их во вкладке «Армия».</p>'}<button class="v15-main" onclick="v15Close();tab='army';drawAll()">Набор новых полков ↗</button></aside><section class="v15-regmain">${r?`<div class="v15-shiptitle"><h3>${esc(r.name)}</h3><span>${esc(REGIMENTS[r.type]?.label||r.type)}</span></div><div class="v15-regscene"><img src="${art(r.weapon||'musket')}" alt=""><div><strong>Командир полка</strong><img src="${V15_PEOPLE[NATIONAL[f].ruler]}" alt=""></div></div>${[['Атака',v15StateLabels(r)[0],3,'#a3bd91'],['Оборона',v15StateLabels(r)[1],3,'#7ca8b8'],['Мораль',r.morale||70,100,'#ceab71'],['Подготовка',r.training||0,100,'#c2a55f'],['Опыт',r.experience,100,'#a9b78e']].map(z=>v15Gauge(...z)).join('')}<h3>Оснащение из национального склада · ${r.gearCount||0}/${r.headcount||800} человек</h3><div class="v15-equipment">${categories.map(([key,label])=>{const eq=V6_EQUIP[key],req=eq.tech&&!has(f,eq.tech),stock=s.equipment[f][key]||0;return `<button ${req||stock<(key.startsWith('gun')?2:120)?'disabled':''} class="${r.weapon===key?'selected':''}" onclick="v15Equip(${r.id},'${key}')"><img src="${art(key)}" alt=""><b>${label}</b><small>Склад ${Math.floor(stock)} · требуется ${key.startsWith('gun')?2:120}</small></button>`}).join('')}</div><div class="v15-shipactions"><button class="v15-main" onclick="v15Train(${r.id})">Полковая муштра · 21 день</button><button onclick="v15Equip(${r.id},'')">Снять оснащение</button><button onclick="v15Close();v8open('production','lines')">Заказать снаряжение</button></div><p>Учения расходуют монеты, продовольствие и порох. Подготовка, опыт и выбранное оружие повышают расчётную эффективность полка в бою.</p>`:'<h3>Выберите собственный гарнизон на карте</h3>'}</section></div>`}
+function v15TechPanel(){let f=s.player,done=s.tech[f].length,active=s.research[f];return `<div class="v15-techpanel"><div class="v15-numbers"><div><small>Изучено</small><b>${done}/${TECH.length}</b></div><div><small>Образование</small><b>${edu(f).toFixed(1)}</b></div><div><small>Активное исследование</small><b>${active?esc(TECH.find(t=>t.id===active.id)?.name||active.id):'нет'}</b></div></div><div class="v15-techgrid">${V15_RESEARCH.map(([id,name,cat,req,time,cost,mods])=>{let d=has(f,id),allowed=techAccessible(f,TECH.find(t=>t.id===id)),can=!d&&!s.research[f]&&allowed&&s.gold[f]>=cost;return `<div class="v15-technode ${d?'done':can?'available':'locked'}"><div class="v15-techpicture"><img src="${(typeof V6_ART!=='undefined'&&(V6_ART[/морск|верф|суд|обшив|эскадр|десант/i.test(name)?'ship':/оруд|ствол|батар/i.test(name)?'gun12':/школ|офицер|навига|стандарт/i.test(name)?'academy':/мушкет|пехот|полк|штыков/i.test(name)?'musket':'industry']))||''}" alt=""></div><b>${name}</b><small>${cat}</small>${Object.entries(mods).map(([k,v])=>`<div class="v15-effect"><span>${BONUS_NAMES[k]||k}</span><strong>${v<1?'−':'+'}${Math.round(Math.abs(1-v)*100)}%</strong></div>`).join('')}<div class="v15-techfoot"><span>${cost} ◈ · ${researchDays(TECH.find(t=>t.id===id),f)} дн.</span><button ${can?'':'disabled'} onclick="v15Research('${id}')">${d?'Изучено':'Исследовать'}</button></div></div>`}).join('')}</div><button class="v15-main" onclick="v15Close();showTechTree()">Открыть полное древо технологий ↗</button></div>`}
+function v15Research(id){research(id);if(document.getElementById('modal')?.classList.contains('visible'))closeModal();v15Render()}
+function v15IndustryPanel(){let v=v8get(),f=s.player,lines=v.lines.filter(x=>x.f===f),resources=['iron','steel','copper','wood','coal','saltpeter','sulfur','hemp','flax','leather','horses','food'];return `<div class="v15-industry"><div class="v15-numbers"><div><small>Мануфактуры</small><b>${v8factoryLimit(f)}</b></div><div><small>Линии</small><b>${lines.length}</b></div><div><small>Готовых предметов</small><b>${Math.round(Object.values(s.equipment[f]||{}).reduce((a,b)=>a+(Number(b)||0),0))}</b></div></div><div class="v15-stockgrid">${resources.map(k=>`<div><strong>${V8_MATERIALS?.[k]?.name||k}</strong><b>${Math.round(v8stock(f,k))}</b><span>${V8_MATERIALS?.[k]?.unit||''}</span></div>`).join('')}</div><h3>Производственные линии</h3><div class="v15-linegrid">${lines.map(l=>`<div><img src="${(typeof V6_ART!=='undefined'&&(V6_ART[V6_EQUIP[l.key]?.art]||V6_ART.industry))||''}" alt=""><b>${esc(V6_EQUIP[l.key]?.name||l.key)}</b><span>Мануфактуры ${l.factories} · эффективность ${Math.round(l.eff*100)}%</span>${v15Gauge('Эффективность',l.eff,1,'#98bd92',Math.round(l.eff*100)+'%')}<small>${l.blocked?'Нехватка: '+esc(l.blocked):'Линия работает'}</small></div>`).join('')||'<p>Назначьте хотя бы одну мануфактуру.</p>'}</div><div class="v15-shipactions"><button class="v15-main" onclick="v15Close();v8open('production','lines')">Распределение заводов ↗</button><button onclick="v15Close();v8open('production','materials')">Импорт сырья</button><button onclick="v15Close();v8open('production','logistics')">Логистика</button></div></div>`}
+function v15Render(){let el=document.getElementById('v15-window');if(!el||!s)return;el.innerHTML=v15Header()+`<div class="v15-h-body">${v15OverlayTab==='fleet'?v15ShipPanel():v15OverlayTab==='regiments'?v15RegPanel():v15OverlayTab==='research'?v15TechPanel():v15IndustryPanel()}</div>`}
+function v15Switch(tab){v15OverlayTab=tab;v15Render()}
+function v15Open(tab='fleet'){v15OverlayTab=tab;pauseGame();let box=document.getElementById('v15-overlay');box.classList.add('open');v15Render()}
+function v15Close(){document.getElementById('v15-overlay')?.classList.remove('open')}
+function v15Rail(){if(!s)return;const el=document.getElementById('v15-rail');if(!el)return;const f=s.player,monarch=NATIONAL[f];let advisers=(s.advisers[f]||[]).map(id=>ADVISERS.find(x=>x.id===id)).filter(Boolean);
+ el.innerHTML=`<div class="v15-railhead"><img src="${V15_PEOPLE[monarch.ruler]}" alt=""><div><small>${esc(F[f].name)}</small><h3>${esc(monarch.ruler)}</h3><span>${esc(monarch.title)}</span></div></div><div class="v15-railmetric"><span>Стабильность</span><b>${Math.round(s.stability[f])}%</b></div>${v15Gauge('Образование',edu(f),100,'#c9b373',edu(f).toFixed(1))}<h4>Совет короны</h4>${advisers.map(a=>`<button class="v15-person" onclick="tab='court';drawAll();v15Open('research')"><img src="${V15_PEOPLE[a.id]}" alt=""><span><b>${esc(a.name)}</b><small>${esc(a.role)}</small>${Object.entries(a.mods).slice(0,1).map(([k,v])=>`<strong>${esc(BONUS_NAMES[k]||k)} ${v<1?'−':'+'}${Math.round(Math.abs(v-1)*100)}%</strong>`).join('')}</span></button>`).join('')||'<small>Советники ещё не назначены</small>'}<h4>Управление</h4><button class="v15-main" onclick="v15Open('fleet')">Адмиралтейство ↗</button><button onclick="v15Open('regiments')">Оснащение армии ↗</button><button onclick="v15Open('research')">Технологии ↗</button><button onclick="v15Open('industry')">Мануфактуры ↗</button><button onclick="tab='court';drawAll()">Правитель и совет ↗</button>`;}
+function v15Install(){if(document.getElementById('v15-overlay'))return;
+ const ov=document.createElement('div');ov.id='v15-overlay';ov.innerHTML='<div id="v15-window"></div>';ov.onclick=e=>{if(e.target===ov)v15Close()};document.body.appendChild(ov);
+ const rail=document.createElement('aside');rail.id='v15-rail';rail.className='v15-rail';document.querySelector('.shell')?.prepend(rail);
+ const dock=document.createElement('section');dock.id='v15-bottomdock';dock.innerHTML=`<button onclick="v15Open('industry')"><img src="${(typeof V6_ART!=='undefined'&&V6_ART.industry)||''}" alt=""><span><b>Производство</b><small>Заводы · склады · импорт</small></span></button><button onclick="v15Open('regiments')"><img src="${(typeof V6_ART!=='undefined'&&V6_ART.infantry)||''}" alt=""><span><b>Армии</b><small>Полки · снаряжение · учения</small></span></button><button onclick="v15Open('fleet')"><img src="${(typeof V6_ART!=='undefined'&&V6_ART.ship)||''}" alt=""><span><b>Флот</b><small>Эскадры · 3D · артиллерия</small></span></button>`;
+ document.querySelector('.primary-column')?.appendChild(dock);
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('v15-overlay')?.classList.contains('open')){e.preventDefault();v15Close()}});
+}
+const v15PreviousDrawAll=drawAll;
+drawAll=function(){v15PreviousDrawAll();if(s&&document.getElementById('v15-rail'))v15Rail()};
+function v15ApplyCSS(){if(document.getElementById('v15-style'))return;let style=document.createElement('style');style.id='v15-style';style.textContent=`
+/* АТЛАС ИМПЕРИЙ XV · Топография и кабинет управления */
+.shell{grid-template-columns:265px minmax(0,1fr)!important;gap:9px!important;max-width:none!important}
+.shell>.v15-rail{grid-column:1;grid-row:1/4;align-self:start;position:sticky;top:8px;max-height:calc(100vh - 16px);overflow:auto;scrollbar-width:thin}
+.shell>.primary-column{grid-column:2;grid-row:1}.shell>.sidebar{grid-column:2;grid-row:2;display:grid!important;grid-template-columns:1fr 1.2fr;gap:10px!important;align-items:start}.shell>.sidebar>.panel:last-child{display:none}.shell>.sidebar>.panel:nth-child(2){grid-column:2}
+.v15-rail{background:linear-gradient(115deg,#172a34,#0b161f);border:2px ridge #b09159;border-radius:7px;padding:9px;box-shadow:0 8px 26px #0009,inset 0 0 0 2px #0b1720}
+.v15-railhead{display:grid;grid-template-columns:95px 1fr;gap:9px;border-bottom:1px solid #8a6c42;padding:3px 0 12px}.v15-railhead img{width:95px;height:130px;object-fit:cover;border:2px solid #b18d54}.v15-railhead small{color:#aab5bb}.v15-railhead h3{margin:7px 0!important;font:700 19px Georgia,serif;color:#f1d7a3}.v15-railhead span{color:#c2b397;font-size:11px}
+.v15-railmetric{display:flex;justify-content:space-between;padding:8px 0;color:#d5c7af}.v15-rail h4{font:700 16px Georgia,serif;color:#e4c48d;margin:13px 0 8px;border-bottom:1px solid #705634;padding-bottom:4px}
+.v15-person{display:grid;grid-template-columns:54px 1fr;gap:7px;width:100%;text-align:left;background:linear-gradient(100deg,#1e313a,#0e1d28)!important;border:1px solid #80633c!important;padding:5px!important;margin:6px 0}.v15-person img{width:54px;height:72px;object-fit:cover;border:1px solid #b79b66}.v15-person small,.v15-person strong{display:block;font-size:10px;margin-top:3px}.v15-person strong{color:#9ed7a8}.v15-person b{font:700 13px Georgia,serif;color:#f2ddb1}
+.v15-rail>button:not(.v15-person){display:block;width:100%;margin-top:6px;font-weight:700}.v15-main{background:linear-gradient(180deg,#b28b4b,#684923)!important;border-color:#d9b377!important;color:#fcf0d3!important}
+#v15-bottomdock{margin:10px 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}#v15-bottomdock>button{display:grid;grid-template-columns:108px 1fr;text-align:left;align-items:center;gap:8px;background:linear-gradient(145deg,#213340,#101b24);border:1px solid #8b6e44;padding:6px;height:102px}#v15-bottomdock img{width:108px;height:84px;object-fit:cover;background:#bdad8f;border:1px solid #bba170}#v15-bottomdock b{display:block;font:700 20px Georgia,serif;color:#f1daaa}#v15-bottomdock small{display:block;font-size:11px;margin-top:6px;color:#a9bec5}
+#map{filter:contrast(1.06) saturate(1.05)}#map .province{stroke:#30261c!important;stroke-width:.95!important;fill-opacity:.96}#map .province:hover{stroke:#d7bc7a!important;stroke-width:2.4!important}#map .coastline{stroke:#e0cc93!important;opacity:.67!important}#map .sea-label{opacity:.7!important}
+#v15-overlay{display:none;position:fixed;inset:0;z-index:999;background:rgba(1,8,12,.89);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:12px}#v15-overlay.open{display:flex}
+#v15-window{width:min(1550px,100%);height:min(900px,96vh);display:flex;flex-direction:column;background:linear-gradient(175deg,#233342,#101b25 24%,#0c151e);border:3px ridge #ad884f;border-radius:10px;box-shadow:0 20px 70px #000d,inset 0 0 0 2px #121c22;overflow:hidden;color:#e8dfc9}
+.v15-h-header{padding:10px 13px;border-bottom:2px ridge #a78a5a;display:flex;justify-content:space-between;align-items:center;gap:14px;background:linear-gradient(#253b46,#13232e)}.v15-h-header small{font-size:10px;color:#b9c8cb;letter-spacing:1.7px}.v15-h-header h2{margin:2px 0;font:700 27px Georgia,serif;color:#f3dca9}.v15-h-header nav{display:flex;flex-wrap:wrap;gap:5px}.v15-h-header button{padding:9px 11px;border-radius:3px}.v15-h-header button.on{background:linear-gradient(#a9824a,#654622);color:#fff4d5;border-color:#d3b273}.v15-close{font-size:20px}
+.v15-h-body{padding:14px;overflow:auto;flex:1;scrollbar-color:#70593a #101924}.v15-h-body h3{font:700 20px Georgia,serif;color:#eccc8f;margin:7px 0 12px}.v15-h-body p{font-size:12px;color:#b7c8ca;line-height:1.5}
+.v15-docklayout,.v15-reglayout{display:grid;grid-template-columns:37% minmax(0,1fr);gap:14px;align-items:start}.v15-docklist,.v15-reglist,.v15-dockhero,.v15-regmain{background:linear-gradient(145deg,#1b2d39,#111d26);border:1px solid #79613c;border-radius:7px;padding:10px;min-width:0}
+.v15-shiptile,.v15-regtile{width:100%;display:grid;grid-template-columns:125px 1fr;gap:10px;text-align:left;align-items:center;padding:6px;margin:6px 0;border:1px solid #3f5865;background:#111f29;border-radius:5px}.v15-shiptile.selected,.v15-regtile.selected,.v15-equipment button.selected{border-color:#d7b277;background:#36402f}.v15-shiptile img,.v15-regtile img{width:125px;height:78px;object-fit:cover;background:#ad9d80;border:1px solid #9f885c}.v15-shiptile b,.v15-regtile b{font:700 15px Georgia,serif;color:#f1d7a0;display:block}.v15-shiptile small,.v15-regtile small{display:block;color:#b0c1c8;margin:5px 0}
+.v15-shiptitle{display:flex;justify-content:space-between;gap:10px;align-items:center}.v15-shiptitle h3{font:700 27px Georgia,serif!important;margin:0!important}.v15-shipimage{position:relative;margin:10px 0;border:2px solid #b59665;border-radius:7px;overflow:hidden;background:#2c4654}.v15-shipimage>img{display:block;width:100%;height:215px;object-fit:cover}.v15-shipimage>div{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:space-around;gap:5px;background:#0b131bdc;padding:10px 5px;color:#edd8aa}
+.v15-shipactions{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 15px}.v15-batteries{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.v15-batteries>div{display:grid;border:1px solid #5d523f;padding:5px;border-radius:5px;background:#13202b}.v15-batteries img{width:100%;height:90px;object-fit:cover;background:#bfac88}.v15-batteries span{color:#b7c5ca;font-size:11px;margin-top:5px}.v15-batteries b{color:#ead4a6}
+.v15-gauge{display:grid;grid-template-columns:105px 1fr 64px;gap:8px;align-items:center;margin:7px 0;font-size:11px}.v15-gauge>span{color:#c3cbd0}.v15-gauge>i{display:block;height:10px;background:#111923;border:1px solid #485d66;overflow:hidden;border-radius:8px}.v15-gauge>i>b{display:block;height:100%;border-radius:8px}.v15-gauge strong{text-align:right;color:#e7d5a9}
+.v15-regscene{display:grid;grid-template-columns:1fr 125px;gap:10px;border:1px solid #716142;padding:8px;background:#182938;margin-bottom:10px}.v15-regscene>img{width:100%;height:180px;object-fit:cover;background:#c9b99c}.v15-regscene>div img{width:105px;height:145px;object-fit:cover;border:1px solid #c4a46f}.v15-regscene>div strong{font:700 14px Georgia,serif;color:#e7d5a9;display:block;margin:0 0 6px}
+.v15-equipment{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.v15-equipment>button{background:#1b2b36;border:1px solid #615238;padding:5px;text-align:left}.v15-equipment img{width:100%;height:85px;object-fit:cover;background:#ccb895}.v15-equipment b,.v15-equipment small{display:block}.v15-equipment b{color:#ead2a3;margin:4px 0}.v15-equipment small{color:#adbec5;font-size:10px}
+.v15-numbers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:5px 0 15px}.v15-numbers>div{padding:12px;border:1px solid #6e583a;background:#14222c}.v15-numbers small{display:block;color:#afc2c8}.v15-numbers b{font:700 22px Georgia,serif;color:#edd5a4}
+.v15-techgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.v15-technode{padding:7px;border:1px solid #635237;border-radius:6px;background:#15242f}.v15-technode.done{outline:1px solid #769e70}.v15-technode.available{outline:1px solid #c1a06a}.v15-techpicture img{width:100%;height:130px;object-fit:cover;background:#bdb098;border:1px solid #b29765}.v15-technode>b{display:block;font:700 16px Georgia,serif;color:#efd9aa;margin:8px 0 3px}.v15-technode>small{display:block;color:#a6b9c1;font-size:11px;margin-bottom:6px}.v15-effect{display:flex;justify-content:space-between;gap:8px;font-size:11px;margin:4px 0}.v15-effect strong{color:#95d1a3}.v15-techfoot{display:flex;gap:5px;align-items:center;justify-content:space-between;margin:10px 0 0}.v15-techfoot button{font-size:11px}
+.v15-stockgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}.v15-stockgrid>div,.v15-linegrid>div{padding:10px;border:1px solid #594930;background:#14232e;border-radius:6px}.v15-stockgrid strong,.v15-stockgrid b,.v15-stockgrid span{display:block}.v15-stockgrid strong{font-size:11px;color:#aebfc5}.v15-stockgrid b{font:700 25px Georgia,serif;color:#efdcac}.v15-stockgrid span{font-size:10px;color:#8aa1a9}.v15-linegrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.v15-linegrid img{width:100%;height:95px;object-fit:cover;background:#ccb996}.v15-linegrid b,.v15-linegrid span,.v15-linegrid small{display:block;margin:5px 0}.v15-linegrid b{font:700 16px Georgia,serif;color:#ead6a8}.v15-linegrid span{color:#afc3cb}
+@media(max-width:1100px){.shell{display:block!important}.shell>.v15-rail{position:static;margin-bottom:10px;max-height:none}.shell>.sidebar{display:flex!important}.v15-railhead{grid-template-columns:76px 1fr}.v15-railhead img{width:76px;height:105px}.v15-docklayout,.v15-reglayout{grid-template-columns:1fr}.v15-techgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.v15-h-header{flex-wrap:wrap}}
+@media(max-width:680px){.v15-equipment,.v15-techgrid,.v15-batteries,.v15-stockgrid,.v15-linegrid,#v15-bottomdock{grid-template-columns:1fr 1fr}.v15-shipimage>div{font-size:10px}.v15-shiptile,.v15-regtile{grid-template-columns:100px 1fr}.v15-shiptile img,.v15-regtile img{width:100px}}
+`;document.head.appendChild(style)}
+v15ApplyCSS();v15Install();
+
+
+/* XVI — Arsenal, military doctrine, supply ministry and modular ship variants. */
+const V16_GUN_PATTERN={
+ short:{name:'Короткий ствол',damage:1.08,range:.78,penetration:.83,reload:1.18,weight:.80,cost:.90,description:'Быстрый залп на малой дистанции'},
+ standard:{name:'Стандартный ствол',damage:1,range:1,penetration:1,reload:1,weight:1,cost:1,description:'Универсальное орудие для линейного боя'},
+ long:{name:'Длинный ствол',damage:1.13,range:1.23,penetration:1.21,reload:.81,weight:1.21,cost:1.18,description:'Повышенная дальность и пробитие'}
+};
+const V16_FORMATIONS={line:{name:'Линия',atk:1.08,def:1.08,speed:.96,morale:1.01},column:{name:'Колонна',atk:.93,def:.95,speed:1.15,morale:1.05},square:{name:'Каре',atk:.86,def:1.18,speed:.70,morale:1.07},skirmish:{name:'Рассыпной строй',atk:1.02,def:1.11,speed:1.12,morale:.95}};
+const V16_RESEARCH=[
+ ['v16_standard_tools','Измерительные шаблоны','Хозяйство',['precisiontools'],{arsenalCost:.95,arsenalSpeed:1.07},195,39],
+ ['v16_naval_foundry','Калибровочные литейные формы','Морская артиллерия',['v15_smelting'],{gunCost:.92,gunAccuracy:1.07},210,42],
+ ['v16_long_barrel','Длинные корабельные стволы','Морская артиллерия',['v15_smelting'],{gunRange:1.09,gunPen:1.08,gunReload:.98},240,45],
+ ['v16_light_guns','Облегчённые корабельные лафеты','Морская артиллерия',['guncarriages'],{gunCost:.96,shipSpeed:1.03},185,36],
+ ['v16_gun_crews','Инструкторы палубной артиллерии','Морская артиллерия',['v15_quickfire'],{gunReload:1.09,gunAccuracy:1.07},235,44],
+ ['v16_divisional_train','Полковые обозные отделения','Логистика',['v15_wagon'],{supply:1.12,armySpeed:1.03},245,43],
+ ['v16_supply_record','Книга армейских поставок','Логистика',['v15_magazines'],{supply:1.07,arsenalCost:.97},195,35],
+ ['v16_bridges','Военно-полевые мосты','Логистика',['roads'],{armySpeed:1.09,supply:1.03},175,31],
+ ['v16_sappers','Инженерные роты в поле','Артиллерия и осады',['siege'],{artillery:1.07,armySpeed:1.04},210,39],
+ ['v16_counterbattery','Контрбатарейная школа','Артиллерия и осады',['v15_fieldcannon'],{artillery:1.13},230,45],
+ ['v16_platoon_fire','Офицерские огневые команды','Пехотные формирования',['platoonfire'],{infAttack:1.09},205,37],
+ ['v16_discipline','Учебные лагеря регулярной армии','Пехотные формирования',['v15_drill'],{armyCost:.94,infAttack:1.05},215,36],
+ ['v16_crew_school','Морская школа команд','Флот',['navalcollege'],{navalPower:1.07,shipSpeed:1.04},220,40],
+ ['v16_yard_cranes','Портовые подъёмные механизмы','Кораблестроение',['drydock'],{shipTime:.87,shipCost:.98},230,44],
+ ['v16_hull_wood','Сезонная выдержка корабельного леса','Кораблестроение',['v15_oak'],{shipHull:1.12,shipCost:1.04},240,42],
+ ['v16_merchant_school','Коммерческие морские школы','Морская торговля',['trade','academies'],{trade:1.11,research:1.03},185,31],
+ ['v16_statute','Провинциальные счётные палаты','Государственные реформы',['civilservice'],{trade:1.07,education:1.08},200,37],
+ ['v16_printing','Печатные технические наставления','Образование',['v15_science'],{research:1.10,education:1.14,arsenalSpeed:1.03},235,44]
+];
+const V16_EFFECTS={};for(const [id,name,cat,req,mods,cost,eduMin] of V16_RESEARCH){
+  V16_EFFECTS[id]=mods;
+  if(!TECH.some(x=>x.id===id))TECH.push({id,name,cat,req,cost,time:Math.max(4,Math.ceil(cost/44)),eduMin,desc:Object.entries(mods).map(([k,v])=>`${BONUS_NAMES[k]||k}: ${v<1?'−':'+'}${Math.round(Math.abs(v-1)*100)}%`).join(' · ')});
+}
+Object.assign(BONUS_NAMES,{gunRange:'Дальность корабельных орудий',gunPen:'Пробитие корабельных орудий'});
+const v16PriorGlobalMod=globalMod;
+globalMod=function(f,k){let base=v16PriorGlobalMod(f,k);for(const id of s?.tech?.[f]||[])if(V16_EFFECTS[id]?.[k]!=null)base*=V16_EFFECTS[id][k];return base};
+function v16(){if(!s)return null;s.v16||={version:16,gunRefits:[],crewDrill:[],logistics:{},seq:160000,records:[]};return s.v16}
+function v16Logistics(f=s.player){let v=v16();v.logistics[f]||={autoImport:false,limits:{iron:55,steel:25,copper:30,wood:75,coal:30,saltpeter:15,sulfur:15,hemp:35,flax:30,food:90},lastMonth:''};return v.logistics[f]}
+function v16SetReserve(key,qty){let p=v16Logistics(),q=Math.max(0,Math.min(500,Number(qty)||0));if(!Object.hasOwn(p.limits,key))return;p.limits[key]=q;v16Render();say(`Целевой запас: ${V8_MATERIALS[key].name} — ${q}`)}
+function v16ToggleAutoImport(){const p=v16Logistics();p.autoImport=!p.autoImport;v16Render()}
+function v16StockPanel(){const f=s.player,p=v16Logistics(),imports=v8get().imports.filter(i=>i.f===f),order=['iron','steel','copper','wood','coal','saltpeter','sulfur','hemp','flax','leather','food'];return `<section class="v16-ministry"><div class="v16-hero"><h3>Управление снабжением и закупками</h3><div><span class="v16-tag">${imports.length} контрактов в пути</span><button class="${p.autoImport?'v15-main':''}" onclick="v16ToggleAutoImport()">Автозакупка: ${p.autoImport?'ВКЛ':'ВЫКЛ'}</button></div></div><p class="v16-note">Задайте государственный запас для каждого материала. При включённой автозакупке казначейство раз в месяц ищет поставщика и оплачивает поставку, когда запасы ниже нормы. Все заказы подчиняются существующим ограничениям казны, торговых конвоев и военного положения.</p><div class="v16-resourcegrid">${order.map(k=>{let stock=v8stock(f,k),target=p.limits[k]??0,m=V8_MATERIALS[k],pct=target?Math.min(100,stock/target*100):100;return `<div class="v16-resource"><div class="v16-rhead"><span class="v16-resourceico" style="background:${m.tint}">${esc(m.icon||k.slice(0,2))}</span><div><b>${esc(m.name)}</b><small>${m.unit} · ${m.price} ◈/ед.</small></div><strong class="${stock<target?'v16-short':''}">${Math.round(stock*10)/10}</strong></div><div class="v16-track"><i style="width:${pct}%;background:${stock<target?'#ce8a60':'#8eb69b'}"></i></div><div class="v16-res-controls"><label>Целевой запас <input type="number" min="0" max="500" step="5" value="${target}" onchange="v16SetReserve('${k}',this.value)"></label><button onclick="v8import('${k}',25);v16Render()">Купить 25</button></div></div>`}).join('')}</div><div class="v16-two"><section><h3>В пути</h3>${imports.slice(0,8).map(i=>`<div class="v16-row"><span>${esc(V8_MATERIALS[i.resource||i.material]?.name||i.resource||i.material||'Ресурс')}</span><b>${Math.round(i.qty||i.amount||0)} · ${i.days||0} дн.</b></div>`).join('')||'<p>Действующих импортных заказов нет.</p>'}</section><section><h3>Производственные узкие места</h3>${v8get().lines.filter(l=>l.f===f&&l.blocked).map(l=>`<div class="v16-row"><span>${esc(V6_EQUIP[l.key]?.name||l.key)}</span><b class="v16-short">${esc(l.blocked)}</b></div>`).join('')||'<p>Все активные линии обеспечены сырьём.</p>'}</section></div></section>`}
+function v16ImportMonth(){const f=s.player,p=v16Logistics(f),month=`${s.year}-${s.month}`;if(!p.autoImport||p.lastMonth===month||s.day!==2)return;p.lastMonth=month;let n=0;for(const [k,target] of Object.entries(p.limits)){if(n>=2||s.gold[f]<100)break;let available=v8stock(f,k);if(available>=target*.7)continue;let qty=Math.max(25,Math.min(100,Math.ceil((target-available)/25)*25));let previous=v8get().imports.length;v8import(k,qty);if(v8get().imports.length>previous)n++}}
+function v16Formation(id,type){const r=v15Regiments(selected).find(x=>x.id===id);if(!r||!V16_FORMATIONS[type])return;if(type==='square'&&REGIMENTS[r.type]?.type!=='Пехота')return say('Каре доступно только пехоте');if(type==='skirmish'&&REGIMENTS[r.type]?.type!=='Пехота')return say('Рассыпной строй доступен пехоте');r.formation=type;v16Render()}
+function v16Resupply(id){const r=v15Regiments(selected).find(x=>x.id===id),f=s.player;if(!r||!own(selected))return;let inv=s.equipment[f];let powderCost=r.type.includes('art')?8:3;let foodCost=3;if((inv.gunpowder||0)<powderCost||s.food[f]<foodCost)return say(`Нужно: ${powderCost} пороха и ${foodCost} провианта`);inv.gunpowder-=powderCost;s.food[f]-=foodCost;r.ammo=Math.min(100,(r.ammo??60)+35);r.fatigue=Math.max(0,(r.fatigue||0)-12);v16Render();drawAll()}
+const v16OldPower=power;
+power=function(p,f,attack=false,where=0){let base=v16OldPower(p,f,attack,where);if(!p?.v15Regiments?.length)return base;let reg=p.v15Regiments,mods=reg.map(r=>{let m=V16_FORMATIONS[r.formation||'line']||V16_FORMATIONS.line;let q=(attack?m.atk:m.def),fat=Math.max(.7,1-(r.fatigue||0)/350),ammo=Math.max(.67,(r.ammo??100)/100);return q*fat*ammo});return base*mods.reduce((a,b)=>a+b,0)/Math.max(1,mods.length)};
+function v16RegPanel(){const r=v15SelectedReg(),base=v16PriorReg();if(!r)return base;const formation=r.formation||'line';const form=V16_FORMATIONS[formation];const rep=`<section class="v16-regtools"><div class="v16-hero"><h3>Тактическая организация: ${esc(r.name)}</h3><span class="v16-tag">${REGIMENTS[r.type]?.type||'Полк'}</span></div><div class="v16-formgrid">${Object.entries(V16_FORMATIONS).filter(([k])=>!['square','skirmish'].includes(k)||REGIMENTS[r.type]?.type==='Пехота').map(([k,z])=>`<button class="${k===formation?'v16-on':''}" onclick="v16Formation(${r.id},'${k}')"><b>${z.name}</b><small>Атака ${Math.round((z.atk-1)*100)}% · Оборона ${Math.round((z.def-1)*100)}% · Марш ${Math.round((z.speed-1)*100)}%</small></button>`).join('')}</div><div class="v16-metgrid"><div><b>Боеприпасы</b>${v15Gauge('Запас',r.ammo??65,100,'#b1c68a',`${r.ammo??65}%`)}</div><div><b>Усталость</b>${v15Gauge('Усталость',r.fatigue||0,100,'#c78979',`${r.fatigue||0}%`)}</div><div><b>Строй</b><strong>${form.name}</strong></div></div><button class="v15-main" onclick="v16Resupply(${r.id})">Пополнить боеприпасы со склада (3–8 пороха, 3 провианта)</button></section>`;return base+rep}
+function v16CrewSchool(id){let sh=s.ships.find(x=>x.id===id&&x.f===s.player),v=v16();if(!sh)return;if(v.crewDrill.some(x=>x.shipId===id))return say('Экипаж уже проходит учения');if(s.gold[s.player]<35||s.food[s.player]<5||(s.equipment[s.player].gunpowder||0)<2)return say('Нужно 35 монет, 5 провианта и 2 пороха');s.gold[s.player]-=35;s.food[s.player]-=5;s.equipment[s.player].gunpowder-=2;v.crewDrill.push({shipId:id,remaining:28});log(`${sh.name}: тренировка артиллеристов, 28 дней.`);v16Render();drawAll()}
+function v16GunStats(c,pattern='standard',f=s.player){let p=V16_GUN_PATTERN[pattern]||V16_GUN_PATTERN.standard;return {damage:c.atk*p.damage*globalMod(f,'gunDamage'),penetration:c.lb*p.penetration*globalMod(f,'gunPen'),range:c.range*p.range*globalMod(f,'gunRange'),reload:c.reload/(p.reload*globalMod(f,'gunReload')),weight:c.weight*p.weight,cost:c.iron*p.cost}}
+function v16Refit(id,pattern){let sh=s.ships.find(x=>x.id===id&&x.f===s.player),p=V16_GUN_PATTERN[pattern],v=v16();if(!sh||!p)return;if(pattern==='long'&&!has(s.player,'v16_long_barrel'))return say('Исследуйте длинные корабельные стволы');if(pattern==='short'&&!has(s.player,'v16_light_guns'))return say('Исследуйте облегчённые лафеты');if(v.gunRefits.some(x=>x.shipId===id))return say('Корабль уже находится на перевооружении');if(!N[sh.port]?.port||s.provinces[sh.port]?.owner!==sh.f)return say('Перевооружение возможно только в своём порту');if(v8get().seaOrders.some(o=>s.fleets.find(f=>f.id===o.fleetId&&f.id===sh.fleetId)))return say('Верните эскадру в порт');const count=(sh.design?.batteries||[]).reduce((a,b)=>a+b.count,0);let steel=Math.ceil(count*.035),wood=Math.ceil(count*.12),iron=Math.ceil(count*.12),gold=Math.ceil(count*.8);if(s.steel[s.player]<steel||s.wood[s.player]<wood||s.iron[s.player]<iron||s.gold[s.player]<gold)return say(`Нужно ${gold} монет, ${steel} стали, ${wood} дерева и ${iron} железа`);s.steel[s.player]-=steel;s.wood[s.player]-=wood;s.iron[s.player]-=iron;s.gold[s.player]-=gold;v.gunRefits.push({shipId:id,pattern,remaining:Math.max(8,Math.ceil(count*.25))});log(`${sh.name}: модернизация батарей начата.`);v16Render();drawAll()}
+function v16GunPanel(sh){const pattern=sh.v16Pattern||'standard',guns=(sh.design?.batteries||[]).reduce((a,b)=>a+b.count,0);const primary=sh.design?.batteries?.find(x=>x.count>0),base=CANNONS.find(c=>c.id===primary?.gun)||CANNONS[2];const active=v16().gunRefits.find(x=>x.shipId===sh.id),drill=v16().crewDrill.find(x=>x.shipId===sh.id);return `<section class="v16-gunfit"><div class="v16-hero"><h3>Батареи и артиллерийская школа</h3><div class="v16-tag">${guns} орудий · ${esc(V16_GUN_PATTERN[pattern].name)}</div></div><div class="v16-presetgrid">${Object.entries(V16_GUN_PATTERN).map(([k,v])=>{const z=v16GunStats(base,k,sh.f);return `<div class="v16-pattern ${pattern===k?'v16-on':''}"><img src="${(typeof V6_ART!=='undefined'&&(V6_ART[primary?.gun]||V6_ART.gun12||V6_ART.cannon))||''}" alt=""><b>${v.name}</b><small>${v.description}</small>${v16Metric('Дальность',z.range,1500,Math.round(z.range)+' м','#77b6c6')}${v16Metric('Пробитие',z.penetration,70,Math.round(z.penetration),'#ceba6f')}${v16Metric('Огонь',z.damage,11,z.damage.toFixed(1),'#a4c28b')}${v16Metric('Перезарядка',1/z.reload,2,(z.reload*10).toFixed(1)+' с','#d5927d')}<button ${pattern===k||!!active?'disabled':''} onclick="v16Refit(${sh.id},'${k}')">${pattern===k?'Установлено':'Переоснастить'}</button></div>`}).join('')}</div>${active?`<p class="v16-note">Перевооружение: ${active.remaining} дн. Остатки материалов уже списаны.</p>`:''}<div class="v16-hero"><h3>Экипаж и обучение</h3><button onclick="v16CrewSchool(${sh.id})" ${drill?'disabled':''}>${drill?'Учения: '+drill.remaining+' дней':'Учебный выход · 28 дней'}</button></div>${v15Gauge('Опыт артиллеристов',sh.gunnery||0,100,'#b1c78d')}${v15Gauge('Мореходная подготовка',sh.seamanship||0,100,'#85abc5')}</section>`}
+function v16Metric(label,value,max,display,color){return `<div class="v16-meter"><span>${label}</span><i><i style="width:${Math.max(5,Math.min(100,value/max*100))}%;background:${color}"></i></i><strong>${display}</strong></div>`}
+const v16OldShipPower=v6shipPower;
+v6shipPower=function(sh,admiral){let pow=v16OldShipPower(sh,admiral);const p=V16_GUN_PATTERN[sh?.v16Pattern||'standard']||V16_GUN_PATTERN.standard;return pow*p.damage*p.penetration*(.80+.002*(sh?.gunnery||0))/.80};
+const v16PriorCannonStats=v15CannonStats;
+v15CannonStats=function(c,f=0){let out=v16PriorCannonStats(c,f);return {...out,penetration:out.penetration*globalMod(f,'gunPen'),range:out.range*globalMod(f,'gunRange')}};
+// Tactical broadside: preserve the original target, ammunition and broadside-sector rules; override calibre model.
+const v16PriorFire=v8fire;
+v8fire=function(u){if(!V8_SCENE||V8_SCENE.kind!=='sea'||u.kind!=='ship')return v16PriorFire(u);let sc=V8_SCENE;if(u.hp<=0||u.cooldown>0)return;const enemy=sc.units.filter(z=>z.team!==u.team&&z.hp>0).sort((a,b)=>Math.hypot(a.pos[0]-u.pos[0],a.pos[1]-u.pos[1])-Math.hypot(b.pos[0]-u.pos[0],b.pos[1]-u.pos[1]))[0];if(!enemy)return;const sh=s.ships.find(x=>x.id===u.shipId),f=sh?.f??s.player,rows=u.design?.batteries?.filter(x=>x.count>0)||[];if(!rows.length)return v16PriorFire(u);const pat=sh?.v16Pattern||'standard',arr=rows.map(r=>({n:r.count,st:v16GunStats(CANNONS.find(c=>c.id===r.gun)||CANNONS[0],pat,f)})),count=arr.reduce((a,z)=>a+z.n,0);if(!count)return;const dist=Math.hypot(u.pos[0]-enemy.pos[0],u.pos[1]-enemy.pos[1]),range=Math.max(...arr.map(z=>z.st.range))/12;if(dist>range)return;const theta=Math.atan2(enemy.pos[1]-u.pos[1],enemy.pos[0]-u.pos[0]),bearing=Math.abs(Math.atan2(Math.sin(theta-u.angle),Math.cos(theta-u.angle)));if(bearing<Math.PI*.19||bearing>Math.PI*.88)return;if(u.ammo==null)u.ammo=100;if(u.ammo<1)return;const power=arr.reduce((a,z)=>a+z.st.damage*z.n/2,0),penetration=arr.reduce((a,z)=>a+z.st.penetration*z.n,0)/count,reload=arr.reduce((a,z)=>a+z.st.reload*z.n,0)/count,armor=(enemy.type==='line'?25:enemy.type==='frigate'?15:enemy.type==='transport'?6:9)*Math.max(.6,enemy.hp/Math.max(1,enemy.maxHp||enemy.hp)),pen=Math.min(1.35,Math.max(.28,penetration/Math.max(1,armor))),crew=Math.max(.35,(sh?.crew||u.crew||70)/Math.max(1,sh?.crewMax||u.crewMax||100)),accuracy=Math.max(.10,(1-dist/(range*1.45))*(.67+Math.random()*.33))*(1+.0025*(sh?.gunnery||0))*globalMod(f,'gunAccuracy');const hit=Math.max(.5,power*.16*pen*accuracy*crew);enemy.hp=Math.max(0,enemy.hp-hit);u.cooldown=Math.max(2,reload*4.8/(1+.002*(sh?.gunnery||0)));u.ammo-=1;sc.smoke ||= [];for(let j=0;j<7;j++)sc.smoke.push({x:u.pos[0]+Math.random()*1.7,y:u.pos[1]+Math.random()*1.7,z:1+Math.random()*2,age:0});if(u.team==='friendly'&&v8Battle)v8Battle.lastHit=`${u.name} → ${enemy.name}: ${hit.toFixed(1)} урона · пробитие ${Math.round(pen*100)}%`};
+const v16PriorMesh=v8shipMesh;
+v8shipMesh=function(type='frigate',design=null){let m=v16PriorMesh(type,design);const r=v15Random(v15Hash('XVI|'+(design?.modelSeed||design?.id||design?.name||type)));const size=type==='line'?1.55:type==='frigate'?1.1:type==='transport'?1.16:.82,L=11*size,W=(type==='line'?3.4:2.8)*size;const gild=['#e3c27b','#b2ae99','#e3ad6a','#a8bbb8'][Math.floor(r()*4)];let trim=3+Math.floor(r()*4);for(let sgn of [-1,1]){for(let j=0;j<trim;j++){let x=-L*.42+(j+.5)*L*.76/trim;v8seg(m,[x,sgn*W*.43,-.12*size],[x+.08*size,sgn*W*.43,.26*size],gild,.5)}for(let j=0;j<4;j++){let x=-L*.38+(j+.5)*L*.74/4;v8cube(m,x,sgn*W*.38,.29*size,.19*size,.02*size,.07*size,gild)}}const flagR=r();for(let j=0;j<3;j++){const x=(-.13+j*.19)*L;v8seg(m,[x,0,5.1*size+j*.1*size],[x+(flagR-.5)*.8*size,.1*size,5.7*size+j*.1*size],'#eadab3',.75)}return m};
+const v16PriorAdvance=advanceDay;
+advanceDay=function(){v16PriorAdvance();if(!s||s.ended)return;const v=v16();for(let a of v.gunRefits){a.remaining--;if(a.remaining<=0){let sh=s.ships.find(x=>x.id===a.shipId);if(sh){sh.v16Pattern=a.pattern;log(`${sh.name}: переоснащение батарей завершено — ${V16_GUN_PATTERN[a.pattern].name}.`)}}}v.gunRefits=v.gunRefits.filter(x=>x.remaining>0);for(let a of v.crewDrill){a.remaining--;if(a.remaining<=0){let sh=s.ships.find(x=>x.id===a.shipId);if(sh){sh.gunnery=Math.min(100,(sh.gunnery||0)+12);sh.seamanship=Math.min(100,(sh.seamanship||0)+9);log(`${sh.name}: артиллерийские учения завершены. Навыки экипажа повышены.`)}}}v.crewDrill=v.crewDrill.filter(x=>x.remaining>0);if(s.day===2)v16ImportMonth()};
+const v16PriorReg=v15RegPanel;
+v15RegPanel=v16RegPanel;
+const v16PriorShipPanel=v15ShipPanel;
+v15ShipPanel=function(){let base=v16PriorShipPanel(),sh=s.ships.find(x=>x.id===v15ShipId&&x.f===s.player);return base+(sh?v16GunPanel(sh):'')};
+const v16PriorHeader=v15Header;
+v15Header=function(){let out=v16PriorHeader();return out.replace('</nav>',`<button class="${v15OverlayTab==='logistics'?'on':''}" onclick="v15Switch('logistics')">Снабжение</button></nav>`)};
+const v16PriorRender=v15Render;
+function v16Render(){v15Render()}
+v15Render=function(){if(v15OverlayTab!=='logistics')return v16PriorRender();let el=document.getElementById('v15-window');if(!el||!s)return;el.innerHTML=v15Header()+`<div class="v15-h-body">${v16StockPanel()}</div>`};
+const v16PriorRail=v15Rail;
+v15Rail=function(){v16PriorRail();const el=document.getElementById('v15-rail');if(!el)return;el.insertAdjacentHTML('beforeend','<button class="v16-supplylink" onclick="v15Open(\'logistics\')">Снабжение и закупки ↗</button>')};
+function v16ApplyCSS(){if(document.getElementById('v16style'))return;const style=document.createElement('style');style.id='v16style';style.textContent=`
+ .v16-ministry,.v16-regtools,.v16-gunfit{padding:14px 8px;border-top:1px solid #7b6440;color:#e9dfc7}.v16-hero{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:0 0 12px}.v16-hero h3{margin:0;font:700 23px Georgia,serif;color:#f0d49f}.v16-note{font-size:12px;color:#aebfc3;line-height:1.5}.v16-tag{background:#1d3442;border:1px solid #6c583c;border-radius:5px;padding:7px 9px;color:#e2d0a5;font-size:12px}.v16-resourcegrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.v16-resource{padding:12px;background:linear-gradient(180deg,#1a303d,#101b25);border:1px solid #5f513a;border-radius:8px}.v16-rhead{display:flex;align-items:center;gap:8px}.v16-rhead>div{flex:1}.v16-rhead small,.v16-resource small{display:block;color:#b0bdc2;font-size:10px}.v16-rhead strong{font:700 20px Georgia,serif;color:#f0d8a5}.v16-resourceico{min-width:38px;height:38px;display:grid;place-items:center;border:1px solid #ddcca5;border-radius:7px;color:#172329;font:bold 14px Georgia,serif}.v16-short{color:#db937c!important}.v16-track{height:7px;border-radius:99px;background:#0a141d;overflow:hidden;margin:10px 0}.v16-track i{height:100%;display:block}.v16-res-controls{display:flex;gap:8px;justify-content:space-between;align-items:flex-end}.v16-res-controls label{font-size:11px;color:#bbced1}.v16-res-controls input{display:block;width:73px;background:#11242f;color:#f0d8a5;border:1px solid #71808b;border-radius:4px;padding:5px;margin-top:5px}.v16-res-controls button{padding:7px;font-size:11px}.v16-two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.v16-two section{border:1px solid #615037;background:#101c27;border-radius:8px;padding:10px}.v16-row{display:flex;justify-content:space-between;border-bottom:1px solid #334957;padding:6px 0;font-size:12px}.v16-formgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.v16-formgrid button{min-height:66px;background:linear-gradient(180deg,#1d3340,#10202b);text-align:left}.v16-formgrid b,.v16-formgrid small{display:block}.v16-formgrid small{font-size:10px;color:#b5c2c6}.v16-on{outline:2px solid #d0a85e!important;border-color:#cfaa68!important}.v16-metgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:8px 0;margin:8px 0}.v16-metgrid>div{padding:10px;border:1px solid #46576a;border-radius:7px}.v16-metgrid b,.v16-metgrid strong{display:block}.v16-presetgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.v16-pattern{background:#10212d;padding:12px;border:1px solid #5f5138;border-radius:8px}.v16-pattern img{width:100%;height:95px;object-fit:cover;border:1px solid #b69a67;border-radius:5px;background:#a88b64}.v16-pattern b,.v16-pattern small{display:block;margin:5px 0}.v16-pattern small{min-height:32px;color:#afbbc3}.v16-pattern button{margin-top:10px;width:100%}.v16-meter{display:grid;grid-template-columns:90px 1fr 65px;gap:5px;align-items:center;font-size:11px;margin:5px 0}.v16-meter>span{color:#b7c8cb}.v16-meter>i{height:8px;background:#0a1520;border-radius:8px;overflow:hidden}.v16-meter>i>i{height:100%;display:block}.v16-meter strong{color:#e5d5aa}.v16-supplylink{display:block;width:100%;margin-top:9px;background:linear-gradient(180deg,#7c623a,#43321e);border-color:#a68858}
+ @media(max-width:1400px){.v16-resourcegrid{grid-template-columns:repeat(3,minmax(0,1fr))}.v16-presetgrid{grid-template-columns:1fr}.v16-formgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:800px){.v16-resourcegrid,.v16-two,.v16-metgrid{grid-template-columns:1fr 1fr}.v16-res-controls{flex-wrap:wrap}}
+ `;document.head.appendChild(style)}
+v16ApplyCSS();
+
+/* XVI-2 — geographic LOD and non-random operational AI. */
+function v16MapLabels(){
+ const z=Math.max(1,typeof zoom==='number'?zoom:1);
+ for(const node of document.querySelectorAll('#towns .majorlabel')){
+   node.style.setProperty('font',`700 ${(node.classList.contains('subtle')?13:19)/z}px Georgia,serif`,'important');
+   node.style.setProperty('stroke-width',2.6/z+'px','important');
+   node.style.setProperty('letter-spacing',Math.max(.06,.8/z)+'px','important');
+ }
+ for(const node of document.querySelectorAll('#seanames .sea-label')){
+   node.style.setProperty('font',`italic ${17/z}px Georgia,serif`,'important');
+   node.style.setProperty('stroke-width',1.2/z+'px','important');
+ }
+}
+const v16PriorScaleLabel=v6scaleLabel;
+v6scaleLabel=function(){v16PriorScaleLabel();v16MapLabels()};
+const v16OldUpdateTransform=updateTransform;
+updateTransform=function(){v16OldUpdateTransform();v16MapLabels()};
+const v16OldDrawMap=drawMap;
+drawMap=function(){v16OldDrawMap();v16MapLabels()};
+function v16StrategicAITurn(){
+ for(let f=0;f<F.length;f++){
+  if(f===s.player)continue;
+  const provinces=regOf(f);if(!provinces.length)continue;
+  const isAtWar=s.wars.some(x=>x.split(':').includes(String(f)));
+  const border=provinces.filter(x=>N[x.i].adj.some(j=>withWar(f,s.provinces[j].owner)));
+  const food=s.food[f],iron=s.iron[f],gold=s.gold[f],wood=s.wood[f];
+  const role=NATIONAL[f]?.quality||'court';
+  // Deliberate industry investment: explicit costs, scarcity-aware, one additional decision per quarter.
+  if(food<90&&gold>=75&&wood>=21){
+   let best=provinces.filter(x=>x.p.farm<5).sort((a,b)=>b.i===CAP[f]?1:a.i===CAP[f]?-1:b.p.market-a.p.market)[0];
+   if(best){best.p.farm++;s.gold[f]-=75;s.wood[f]-=21;}
+  }else if(iron<55&&gold>=125&&wood>=24){
+   let best=provinces.filter(x=>x.p.workshop<4).sort((a,b)=>b.p.road-a.p.road)[0];
+   if(best){best.p.workshop++;s.gold[f]-=125;s.wood[f]-=24;}
+  }else if(border.length&&food>=80&&gold>=105&&wood>=30){
+   let best=border.sort((a,b)=>(b.p.depot?0:1)-(a.p.depot?0:1))[0];
+   if(best&&best.p.depot<3){best.p.depot++;s.gold[f]-=95;s.wood[f]-=30;}
+  }
+  // Replace indiscriminate research only when the AI has no project and an appropriate reserve.
+  if(!s.research[f]&&gold>250){
+   let categories=isAtWar?['Логистика','Артиллерия и осады','Пехотные формирования']:role==='navy'?['Кораблестроение','Морская артиллерия','Флот']:role==='research'?['Образование','Хозяйство']:['Хозяйство','Государственные реформы','Логистика'];
+   const candidates=TECH.filter(t=>!has(f,t.id)&&techAccessible(f,t)&&t.cost+95<=s.gold[f]);
+   candidates.sort((a,b)=>{let sa=(categories.includes(a.cat)?100:0)+(a.eduMin||0)*.05-a.cost*.05, sb=(categories.includes(b.cat)?100:0)+(b.eduMin||0)*.05-b.cost*.05;return sb-sa});
+   const choice=candidates[0];if(choice){s.gold[f]-=choice.cost;let days=researchDays(choice,f);s.research[f]={id:choice.id,remaining:days,total:days}}
+  }
+ }
+}
+const v16OldComputerTurn=computerTurn;
+computerTurn=function(){v16OldComputerTurn();v16StrategicAITurn()};
+/* Separate XVI saves prevent an experimental update from overwriting an older campaign. */
+const V16_SAVE_KEY='empire_of_sails_v16_save';
+const v16PreviousSave=save, v16PreviousLoad=load, v16PreviousQuiet=saveQuiet;
+save=function(){try{v16();v8get();localStorage.setItem(V16_SAVE_KEY,JSON.stringify(s));say('Кампания XVI сохранена')}catch(e){say('Локальное сохранение недоступно: используйте экспорт JSON')}};
+load=function(){try{let raw=JSON.parse(localStorage.getItem(V16_SAVE_KEY)||localStorage.getItem(V10_SAVE_KEY)||'null');if(!raw)throw Error('Нет сохранения');restoreSave(raw);v16();drawAll();say('Кампания XVI загружена')}catch(e){say('Загрузка не удалась: '+e.message)}};
+saveQuiet=function(){try{if(s){v16();localStorage.setItem(V16_SAVE_KEY,JSON.stringify(s))}}catch(e){}};
+// Gunnery refits also affect actual sailing speed through the existing fleet movement calculator.
+const v16OldFleetSpeed=v8fleetSpeed;
+v8fleetSpeed=function(fleet){const speed=v16OldFleetSpeed(fleet),members=v8shipsOf(fleet);if(!members?.length)return speed;const factor=Math.min(...members.map(sh=>sh.v16Pattern==='long'?.955:sh.v16Pattern==='short'?1.035:1));return Math.max(2.5,speed*factor)};
+
+
+/* XVII | Connected government, regimental outfitting, ship blueprints, reactive AI. */
+const V17_SAVE_KEY='imperii_parusov_v17_save';
+const V17_POLICIES={
+ balanced:{name:'Сбалансированная корона',desc:'Финансы и армия развиваются без перекоса',mods:{},stability:0},
+ maritime:{name:'Морская держава',desc:'Больше кораблей, но сложнее снабжать сухопутные войска',mods:{shipTime:.89,shipCost:.94,navalPower:1.08,armyCost:1.08},stability:0},
+ continental:{name:'Военное государство',desc:'Постоянные полки и осадные парки',mods:{infAttack:1.08,artillery:1.06,armyCost:.94,trade:.94},stability:-2},
+ mercantile:{name:'Торговая республика',desc:'Больше доходов и науки, но дорогая оборона',mods:{trade:1.15,research:1.06,fort:.93},stability:1},
+ academy:{name:'Академическое управление',desc:'Научные общества и образовательные реформы',mods:{education:1.18,research:1.10,shipCost:1.06,armyCost:1.04},stability:0}
+};
+const V17_TECHS=[
+ ['v17_armoury_cadastre','Арсенальная перепись','Хозяйство',['manufactory'],125,4,22,{arsenalSpeed:1.08,arsenalCost:.97}],
+ ['v17_steel_quality','Испытание кузнечной стали','Хозяйство',['v17_armoury_cadastre'],155,5,30,{gunCost:.94,industry:1.04}],
+ ['v17_powder_rations','Пороховые нормы','Логистика',['magazine'],130,4,26,{armyLoss:.94,gunCost:.97}],
+ ['v17_river_transports','Речные перевалки','Логистика',['roads'],155,5,35,{armySpeed:1.06,trade:1.04}],
+ ['v17_officer_colleges','Школы унтер-офицеров','Образование',['academies'],140,5,31,{education:1.11,regimentTime:.94}],
+ ['v17_textbook_press','Учебная печать','Образование',['v17_officer_colleges'],180,6,41,{research:1.08,education:1.10}],
+ ['v17_survey_cadets','Кадетская геодезия','Образование',['v17_textbook_press'],190,6,46,{research:1.05,armySpeed:1.06}],
+ ['v17_regiment_standards','Полковые знамёна','Пехотные формирования',['drill'],130,4,26,{infAttack:1.05,infantryDef:1.06}],
+ ['v17_battalion_fire','Очередность залпов','Пехотное оружие',['flintlock'],165,5,37,{infAttack:1.09,regimentTime:1.03}],
+ ['v17_field_musicians','Полковые музыканты','Пехотные формирования',['v17_regiment_standards'],165,5,42,{infantryDef:1.09,armyLoss:.96}],
+ ['v17_cavalry_remount','Ремонтные конные депо','Конница',['cavalry'],135,4,29,{cavalry:1.07,armySpeed:1.05}],
+ ['v17_iron_liners','Упрочнение каналов стволов','Морская артиллерия',['gunnery'],205,6,47,{gunPen:1.10,gunDamage:1.06,gunCost:1.04}],
+ ['v17_quick_sponges','Банники нового образца','Морская артиллерия',['v17_iron_liners'],195,6,50,{gunReload:1.10,gunAccuracy:1.03}],
+ ['v17_aimed_fire','Школа прицельного огня','Морская артиллерия',['v17_quick_sponges'],245,7,60,{gunRange:1.08,gunAccuracy:1.08}],
+ ['v17_deck_reinforcement','Усиление орудийных палуб','Кораблестроение',['shipyards'],185,6,42,{shipHull:1.10,shipCost:1.04}],
+ ['v17_blocks_pulleys','Система блоков и талей','Кораблестроение',['rigging'],170,5,40,{shipTime:.90,shipSpeed:1.04}],
+ ['v17_galley_kitchens','Корабельные камбузы','Флот',['navigation'],160,5,44,{shipPower:1.05,shipTime:.97}],
+ ['v17_signal_books','Кодовые книги эскадр','Флот',['signals'],205,6,55,{navalPower:1.08,shipSpeed:1.05}],
+ ['v17_merchants_insurance','Купеческое страхование','Морская торговля',['trade'],170,5,37,{trade:1.12,shipCost:.98}],
+ ['v17_state_contracts','Контрактные мануфактуры','Государственные реформы',['cadastre'],195,5,49,{arsenalCost:.92,armyCost:.96}]
+];
+for(let [id,name,cat,req,cost,time,eduMin,mods] of V17_TECHS){if(!TECH.some(x=>x.id===id))TECH.push({id,name,cat,req,cost,time,eduMin,mods,desc:Object.entries(mods).map(([k,v])=>`${BONUS_NAMES[k]||k}: ${v<1?'−':'+'}${Math.round(Math.abs(v-1)*100)}%`).join(' · ')})}
+Object.assign(BONUS_NAMES,{artillery:'Урон артиллерии',infantryDef:'Оборона пехоты',gunPen:'Пробитие орудий',gunRange:'Дальность орудий',gunReload:'Скорость перезарядки',gunDamage:'Урон орудий',shipHull:'Прочность корпуса',regimentTime:'Срок подготовки',armyLoss:'Потери войск',gunAccuracy:'Точность орудий',shipSpeed:'Скорость кораблей',arsenalSpeed:'Скорость производства',arsenalCost:'Себестоимость продукции'});
+function v17State(){if(!s)return null;if(!s.v17)s.v17={version:17,policies:{},policyCooldown:{},selectedDesign:null,seed:171700,events:[],allocation:{}};return s.v17}
+const v17PriorMod=globalMod;
+globalMod=function(f,k){let v=v17PriorMod(f,k);const p=V17_POLICIES[v17State()?.policies?.[f]||'balanced'];if(p?.mods?.[k]!=null)v*=p.mods[k];for(const t of V17_TECHS){if(has(f,t[0])&&t[7][k]!=null)v*=t[7][k]}return v};
+function v17SetPolicy(key){if(!V17_POLICIES[key])return;const v=v17State(),f=s.player,now=s.turn||0;if(v.policyCooldown[f]>now)return say('Недавно изменена государственная политика. Дождитесь следующего квартала.');if((s.gold[f]||0)<130||s.action<1)return say('Нужно 130 монет и один дипломатический указ');s.gold[f]-=130;s.action--;v.policies[f]=key;v.policyCooldown[f]=now+1;s.stability[f]=clamp(s.stability[f]+V17_POLICIES[key].stability,0,100);log(`Утверждена государственная доктрина «${V17_POLICIES[key].name}».`);v15Render();drawAll()}
+function v17PolicyPanel(){const f=s.player,v=v17State(),active=v.policies[f]||'balanced',modFmt=(k,m)=>`<div class="v17-mod"><span>${esc(BONUS_NAMES[k]||k)}</span><b class="${m<1?'v17-favorable':'v17-positive'}">${m<1?'−':'+'}${Math.round(Math.abs(1-m)*100)}%</b></div>`;return `<div class="v17-policy"><div class="v17-sectionhead"><h2>Совет министров</h2><small>Государственные приоритеты влияют на действующие расчёты экономики и военного дела</small></div><div class="v17-policygrid">${Object.entries(V17_POLICIES).map(([key,p])=>`<section class="v17-policycard ${active===key?'chosen':''}"><div class="v17-policy-plate"><img src="${v17Icon(key)}" alt="Государственная доктрина"></div><h3>${p.name}</h3><p>${p.desc}</p>${Object.entries(p.mods).map(([k,m])=>modFmt(k,m)).join('')||'<div class="v17-mod">Без дополнительных модификаторов</div>'}<button ${active===key?'disabled':''} onclick="v17SetPolicy('${key}')">${active===key?'Действующая политика':'Утвердить · 130 ◈'}</button></section>`).join('')}</div><div class="v17-status-note">Перемена доктрины расходует один государственный указ и 130 монет. При нескольких бонусах итог рассчитывается как произведение коэффициентов.</div></div>`}
+// Generate individual research plates, with reproducible geometry and unique emblems; no emoji duplication.
+const V17_PLATES={};
+function v17Icon(key){if(V17_PLATES[key])return V17_PLATES[key];let seed=v15Hash(key),r=v15Random(seed);const c=['#ab8754','#b6af92','#9fbaac','#ae8580','#8ea7b9'][Math.floor(r()*5)],stroke=['#453326','#444a46','#404f52'][Math.floor(r()*3)]; const val=key.toLowerCase();
+ let subject='';if(/gun|art|barrel|fire|sponge|powder|iron|battery/.test(val)){subject=`<path d="M28 78H128L155 61L163 66L138 89H28Z" fill="#343b40" stroke="#0a1319" stroke-width="4"/><path d="M29 87L18 96H128L140 87" fill="#805735" stroke="${stroke}" stroke-width="3"/><circle cx="52" cy="106" r="22" fill="#76563b" stroke="#38291c" stroke-width="5"/><circle cx="117" cy="106" r="22" fill="#76563b" stroke="#38291c" stroke-width="5"/><circle cx="52" cy="106" r="9" fill="${c}"/><circle cx="117" cy="106" r="9" fill="${c}"/>`}
+ else if(/nav|ship|sea|maritime|deck|galley|block|signal|merch|insurance/.test(val)){subject=`<path d="M22 99Q92 137 164 99L143 119Q79 145 39 116Z" fill="#513a2b" stroke="#262019" stroke-width="3"/><path d="M86 31V106" stroke="#6d5339" stroke-width="5"/><path d="M83 32L35 93H84Z" fill="#eee4ce" stroke="#bbad95" stroke-width="2"/><path d="M91 36L145 92H92Z" fill="#cfd9d5" stroke="#b2b8aa" stroke-width="2"/><path d="M86 31V20" stroke="#54321d" stroke-width="4"/>`}
+ else if(/musket|inf|regiment|cavalry|officer|battalion|field/.test(val)){subject=`<path d="M22 118L148 42" stroke="#352922" stroke-width="10" stroke-linecap="round"/><path d="M26 112L150 38" stroke="#c3baab" stroke-width="3"/><path d="M93 73L107 92" stroke="#856038" stroke-width="6"/><path d="M70 84L81 104" stroke="#554230" stroke-width="7"/><path d="M114 51L141 69" stroke="#a89c82" stroke-width="3"/>`}
+ else {subject=`<path d="M25 105L85 33L151 105Z" fill="#6d5c47" stroke="#413426" stroke-width="3"/><rect x="39" y="101" width="99" height="18" fill="#7b6d50" stroke="#413426"/><path d="M55 90V63M86 90V63M117 90V63" stroke="#e0d1ae" stroke-width="10"/><path d="M36 105H139" stroke="#c7b388" stroke-width="3"/>`}
+ const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 148"><defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e1d4bb"/><stop offset="1" stop-color="#938b78"/></linearGradient></defs><rect width="180" height="148" fill="url(#b)"/><path d="M8 8H172V140H8Z" fill="none" stroke="#5e5544" stroke-width="2"/>${subject}<path d="M15 126H165" stroke="${c}" stroke-width="5"/><circle cx="158" cy="20" r="11" fill="${c}" stroke="#483b2b"/><text x="158" y="24" fill="#f8eed5" font-family="Georgia" font-size="9" text-anchor="middle">${seed%89+10}</text></svg>`;
+ return V17_PLATES[key]='data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg)}
+function v17TechArt(t){return v17Icon(t.id)}
+function v17NewTechBlock(){let f=s.player,pool=V17_TECHS;return `<section class="v17-research"><div class="v17-sectionhead"><h3>Новые школы XXI столетия не нужны — развиваем XVII–XVIII век</h3><small>Все значения показывают именно те множители, которые используются в расчётах</small></div><div class="v17-techgrid">${pool.map(([id,name,cat,req,cost,time,eduMin,mods])=>{let t=TECH.find(t=>t.id===id),done=has(f,id),can=!done&&!s.research[f]&&techAccessible(f,t)&&s.gold[f]>=cost;return `<div class="v17-techcard"><img src="${v17TechArt(t)}" alt=""><b>${esc(name)}</b><small>${esc(cat)} · образование ${eduMin}</small>${Object.entries(mods).map(([k,m])=>`<div class="v17-mod"><span>${BONUS_NAMES[k]||k}</span><b>${m<1?'−':'+'}${Math.round(Math.abs(1-m)*100)}%</b></div>`).join('')}<button ${can?'':'disabled'} onclick="v15Research('${id}')">${done?'Изучено':s.research[f]?.id===id?'Изучается':'Изучить · '+cost+' ◈'}</button></div>`}).join('')}</div></section>`}
+const v17OldTechPanel=v15TechPanel;
+v15TechPanel=function(){return v17OldTechPanel()+v17NewTechBlock()};
+// Equipment has mutually exclusive specialist accessory slots and consumes actual stock.
+const V17_ACCESSORIES={
+ bayonet:{name:'Штык к мушкету',bonus:{attack:1.06,defence:1.03},count:90,tech:null,category:'Пехота'},
+ sabre1700:{name:'Палаш',bonus:{attack:1.07,morale:1.02},count:75,tech:null,category:'Пехота и конница'},
+ cavalrySabre:{name:'Кавалерийская сабля',bonus:{attack:1.10,defence:1.01},count:75,tech:null,category:'Конница'},
+ uniform:{name:'Полковое обмундирование',bonus:{defence:1.04,morale:1.05},count:120,tech:null,category:'Все части'},
+ wagon:{name:'Полковой обоз',bonus:{supply:1.13,defence:1.02},count:1,tech:'roads',category:'Все части'}
+};
+function v17KitFactor(r,kind){let x=1;for(const item of Object.values(r?.v17Kit||{})){if(!item?.key)continue;let a=V17_ACCESSORIES[item.key];if(a)x*=1+((a.bonus[kind]||1)-1)*Math.min(1,item.count/(item.key==='wagon'?1:Math.max(1,r.headcount||800)))}return x}
+function v17EquipAccessory(id,key){const reg=v15Regiments(selected).find(r=>r.id===id),item=V17_ACCESSORIES[key];if(!reg||!item||!own(selected))return;if(item.tech&&!has(s.player,item.tech))return say('Требуется соответствующее исследование');const type=REGIMENTS[reg.type]?.type||'Пехота';if(type==='Конница'&&key==='bayonet')return say('Штыки предназначены пехоте');const inv=s.equipment[s.player]||{},slot=key==='wagon'?'support':key==='uniform'?'clothing':'melee';reg.v17Kit||={};const old=reg.v17Kit[slot];if(old){inv[old.key]=(inv[old.key]||0)+old.count;delete reg.v17Kit[slot]};if(old?.key===key){v15Render();drawAll();return}let required=key==='wagon'?1:Math.max(1,reg.headcount||800);let qty=Math.min(required,Math.max(0,Math.floor(inv[key]||0)));if(qty<=0){if(old){reg.v17Kit[slot]=old;inv[old.key]-=old.count}return say('На складе недостаточно снаряжения: '+item.name)}inv[key]-=qty;reg.v17Kit[slot]={key,count:qty};log(reg.name+': выдано '+item.name+' ('+qty+').');v15Render();drawAll()}
+function v17AccessoryPanel(){const reg=v15SelectedReg();if(!reg)return '';const inventory=s.equipment[s.player]||{};return `<section class="v17-outfit"><div class="v17-sectionhead"><h3>Полковое оснащение и вспомогательные предметы</h3><small>Предметы списываются со склада. Сила полка зависит от выданного количества.</small></div><div class="v17-kitgrid">${Object.entries(V17_ACCESSORIES).map(([key,a])=>{let selected=Object.values(reg.v17Kit||{}).some(x=>x?.key===key);return `<div class="v17-kit"><img src="${v17Icon(key)}" alt=""><strong>${a.name}</strong><small>Склад: ${Math.floor(inventory[key]||0)} · штат ${key==='wagon'?1:(reg.headcount||800)}</small>${Object.entries(a.bonus).map(([k,v])=>`<div class="v17-mod"><span>${{attack:'Атака',defence:'Оборона',morale:'Мораль',supply:'Снабжение'}[k]}</span><b>+${Math.round((v-1)*100)}%</b></div>`).join('')}<button onclick="v17EquipAccessory(${reg.id},'${key}')">${selected?'Снять со склада':'Выдать полку'}</button></div>`}).join('')}</div><div class="v17-kit-summary">Действующие бонусы полка: атака +${Math.round((v17KitFactor(reg,'attack')-1)*100)}%, оборона +${Math.round((v17KitFactor(reg,'defence')-1)*100)}%, мораль +${Math.round((v17KitFactor(reg,'morale')-1)*100)}%.</div></section>`}
+const v17OldRegPanel=v15RegPanel;
+v15RegPanel=function(){return v17OldRegPanel()+v17AccessoryPanel()};
+const v17OldPower=power;
+power=function(p,f,attack=false,where=0){let val=v17OldPower(p,f,attack,where);if(!p?.v15Regiments?.length)return val;const factors=p.v15Regiments.map(r=>v17KitFactor(r,attack?'attack':'defence'));return val*factors.reduce((a,b)=>a+b,0)/factors.length};
+// Commissioned ships keep their original blueprint; new blueprints can have generated hull variants.
+function v17NewSeed(){let v=v17State();v.seed=(Math.imul(v.seed,1664525)+1013904223)>>>0;return v.seed}
+function v17SelectBlueprint(id){v17State().selectedDesign=id;v15Render()}
+function v17Blueprint(){let designs=s.shipDesigns.filter(d=>d.f===s.player),v=v17State();return designs.find(x=>x.id===v.selectedDesign)||designs[0]||null}
+function v17RandomizeBlueprint(){let d=v17Blueprint();if(!d)return say('Сначала создайте проект корпуса');d.modelSeed=v17NewSeed();v15Render();log('Чертёжное бюро изменило внешний вариант корпуса «'+d.name+'».')}
+function v17CreateBlueprint(type){
+ const before=s.shipDesigns.length;
+ const issues=(typeof v7shipGate==='function')?v7shipGate(type):[];
+ if(issues.length){say(issues[0]);v15Open('fleet');return}
+ v6makeDesign(type);
+ if(s.shipDesigns.length>before)v17State().selectedDesign=s.shipDesigns[s.shipDesigns.length-1].id;
+ v15Open('fleet')
+}
+function v17ShipDesigner(){const designs=s.shipDesigns.filter(d=>d.f===s.player),d=v17Blueprint();let st=null;try{if(d)st=v6designStats(d)}catch(e){}let selection=designs.map(x=>`<option value="${x.id}" ${x.id===d?.id?'selected':''}>${esc(x.name)}</option>`).join('');return `<section class="v17-ship-designer"><div class="v17-sectionhead"><h3>Чертёжная мастерская · процедурные 3D-корпуса</h3><small>Изменение проекта не добавляет корабли бесплатно. Для постройки потребуются исследования, верфь, материалы и орудия.</small></div><div class="v17-design-grid"><div class="v17-canvas-shell"><canvas id="v17-preview" width="880" height="400"></canvas><div class="v17-overprint">Вращайте модель мышью · колесо — масштаб · параметры корпуса сохраняются в чертеже</div></div><div class="v17-design-controls"><h3>${d?esc(d.name):'Нет проекта'}</h3>${!d?`<div class="v17-note">Для чертежа нужен назначенный министр кораблестроения, достаточное образование и исследования корпуса. <button onclick="v15Close();tab='court';drawAll()">Открыть государственный совет</button></div>`:''}<select onchange="v17SelectBlueprint(+this.value)">${selection||'<option>Проектов нет</option>'}</select><div class="v17-buttonrow"><button onclick="v17CreateBlueprint('sloop')">+ Шлюп</button><button onclick="v17CreateBlueprint('frigate')">+ Фрегат</button><button onclick="v17CreateBlueprint('line')">+ Линейный</button></div><button class="v15-main" ${!d?'disabled':''} onclick="v17RandomizeBlueprint()">Новый вариант обводов и украшений</button>${st?`<div class="v17-mod"><span>Орудия на чертеже</span><b>${st.guns}</b></div><div class="v17-mod"><span>Расчётная скорость</span><b>${st.speed?.toFixed(1)||'—'} уз.</b></div><div class="v17-mod"><span>Экипаж</span><b>${st.crewMax||'—'}</b></div><div class="v17-mod"><span>Вариант корпуса</span><b>#${d.modelSeed||0}</b></div><div class="v17-mod"><span>Стоимость</span><b>${st.gold||'—'} ◈</b></div>`:''}<div class="v17-note">Изменение художественного варианта корпуса само по себе не меняет боевые характеристики. Их определяют чертёж батарей, технологии, материалы и экипаж.</div></div></div></section>`}
+const v17OldShipPanel=v15ShipPanel;
+function v17AdmiralCard(){const fl=s.fleets.find(x=>x.f===s.player),ad=V6_ADMIRALS[fl?.admiral??0];if(!fl||!ad)return '';const portrait=v15Portrait(ad.name,'Адмирал');return `<section class="v17-admiral"><img src="${portrait}" alt="Портрет адмирала"><div><small>Командование действующей эскадрой</small><h3>${esc(ad.name)}</h3><b>${esc(fl.name)}</b><div class="v17-admiralmods">${Object.entries(ad.mod||{}).map(([k,v])=>`<div class="v17-mod"><span>${BONUS_NAMES[k]||k}</span><b>${v<1?'−':'+'}${Math.round(Math.abs(v-1)*100)}%</b></div>`).join('')}</div></div></section>`}
+v15ShipPanel=function(){return v17ShipDesigner()+v17AdmiralCard()+v17OldShipPanel()};
+// Same 3D triangle mesh as the in-game viewer; a live turntable embedded in shipyard.
+let V17_CAM={yaw:.64,pitch:.48,zoom:1.0,frame:0};
+function v17DrawModel(){const c=document.getElementById('v17-preview'),d=v17Blueprint();if(!c)return;const ctx=c.getContext('2d');if(!ctx)return;ctx.fillStyle='#102636';ctx.fillRect(0,0,c.width,c.height);if(!d){ctx.fillStyle='#d7bc81';ctx.font='22px Georgia';ctx.fillText('Выберите новый проект корпуса',40,180);return}
+ const mesh=v8shipMesh(d.type,d),w=c.width,h=c.height,yaw=V17_CAM.yaw,pitch=V17_CAM.pitch,cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch),scale=(d.type==='line'?12:d.type==='frigate'?16:18)*V17_CAM.zoom;
+ const project=(p)=>{const x=p[0]*cy-p[1]*sy,z=p[0]*sy+p[1]*cy;return {x:w*.5+x*scale,y:h*.62+(z*sp-p[2]*cp)*scale,depth:z*cp+p[2]*sp}};
+ const faces=mesh.faces.map(t=>{const pts=t.p.map(project);return {pts,d:pts.reduce((a,p)=>a+p.depth,0)/3,color:t.color}}).sort((a,b)=>a.d-b.d);
+ for(const f of faces){ctx.beginPath();ctx.moveTo(f.pts[0].x,f.pts[0].y);for(const p of f.pts.slice(1))ctx.lineTo(p.x,p.y);ctx.closePath();ctx.fillStyle=f.color;ctx.fill();ctx.strokeStyle='rgba(18,21,24,.17)';ctx.lineWidth=.45;ctx.stroke()}
+ for(const segment of mesh.segments){let a=project(segment.a),b=project(segment.b);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle=segment.color;ctx.lineWidth=Math.max(.55,segment.w||1);ctx.stroke()}
+}
+function v17InitCanvas(){const c=document.getElementById('v17-preview');if(!c)return;if(c.dataset.ready!=='1'){c.dataset.ready='1';let down=null;c.addEventListener('pointerdown',e=>{down=[e.clientX,e.clientY];c.setPointerCapture(e.pointerId)});c.addEventListener('pointermove',e=>{if(!down)return;V17_CAM.yaw+=(e.clientX-down[0])*.008;V17_CAM.pitch=Math.max(.08,Math.min(1.1,V17_CAM.pitch+(e.clientY-down[1])*.005));down=[e.clientX,e.clientY];cancelAnimationFrame(V17_CAM.frame);V17_CAM.frame=requestAnimationFrame(v17DrawModel)});c.addEventListener('pointerup',()=>down=null);c.addEventListener('wheel',e=>{e.preventDefault();V17_CAM.zoom=Math.max(.45,Math.min(2.5,V17_CAM.zoom*(e.deltaY<0?1.1:.9)));v17DrawModel()},{passive:false})}v17DrawModel()}
+const v17OldRender=v15Render;
+v15Render=function(){if(v15OverlayTab==='policy'){const el=document.getElementById('v15-window');if(el)el.innerHTML=v15Header()+`<div class="v15-h-body">${v17PolicyPanel()}</div>`;return}v17OldRender();if(v15OverlayTab==='fleet')requestAnimationFrame(v17InitCanvas)};
+const v17OldRail=v15Rail;
+v15Rail=function(){v17OldRail();const rail=document.getElementById('v15-rail');if(rail&&!rail.querySelector('#v17-policy-button'))rail.insertAdjacentHTML('beforeend','<button id="v17-policy-button" class="v15-main" onclick="v15Open(\'policy\')">Государственные доктрины ↗</button>')};
+const v17OldStartMesh=v8meshFor;
+v8meshFor=function(entity){if(entity?.kind==='ship'&&entity.design?.modelSeed!=null){entity.meshKey=(entity.meshKey||entity.kind+':'+entity.type)+':variant-'+entity.design.modelSeed}return v17OldStartMesh(entity)};
+// Correct 3D cannon: full wooden carriage, axle, barrel taper and separate muzzle ring.
+v8cannon3d=function(m,x,y,z,lb=12,side=1,scale=1){let L=(.40+lb*.009)*scale,r=(.055+lb*.0016)*scale,chassis=(.37+lb*.003)*scale;
+ v8cube(m,x,y,z-.10*scale,chassis,.35*scale,.15*scale,'#875e39');v8cube(m,x,y-side*.035*scale,z-.04*scale,chassis*.9,.29*scale,.045*scale,'#ac895b');
+ for(let dx of [-chassis*.32,chassis*.32]){let px=x+dx;v8cylinder(m,[px,y-.22*scale,z-.15*scale],[px,y+.22*scale,z-.15*scale],.13*scale,'#5b402b',12);v8cylinder(m,[px,y-.23*scale,z-.15*scale],[px,y-.25*scale,z-.15*scale],.05*scale,'#bd985c',12)}
+ v8cylinder(m,[x,y-side*.13*scale,z+.05*scale],[x,y+side*L,z+.06*scale],r,'#333a3e',13);
+ v8cylinder(m,[x,y+side*(L*.83),z+.06*scale],[x,y+side*(L*.96),z+.06*scale],r*1.20,'#42494c',13);
+ v8cylinder(m,[x,y-side*.15*scale,z+.06*scale],[x,y-side*.19*scale,z+.06*scale],r*1.43,'#485052',13);
+ v8seg(m,[x-chassis*.31,y-side*.12*scale,z-.03*scale],[x+chassis*.31,y-side*.12*scale,z-.03*scale],'#947244',1.3);
+};
+// Richer map appearance with finite, geographic decorative layers; preserve all original click targets.
+function v17StyleMap(){const svg=document.getElementById('map'),world=document.getElementById('world');if(!svg||!world)return;
+ const deco=document.getElementById('v14decor');if(deco)deco.remove();let relief=document.getElementById('v17-relief');if(!relief){relief=document.createElementNS('http://www.w3.org/2000/svg','g');relief.setAttribute('id','v17-relief');relief.setAttribute('pointer-events','none');const pts=N.filter(n=>n.port&&n.core).slice(0,100);relief.innerHTML=pts.map((n,i)=>`<circle cx="${n.x}" cy="${n.y}" r="${i%3===0?.9:.6}" fill="#f0d9a8" stroke="#202e35" stroke-width=".8"/>`).join('');world.appendChild(relief)}
+ // Preserve labels, but keep the user-facing fontsize readable during zoom.
+ document.querySelectorAll('.majorlabel').forEach(x=>{x.style.fill='#f4e6c8';x.style.fontFamily='Georgia,serif';x.style.stroke='#131b22';x.style.strokeWidth=2/Math.max(1,zoom)+'px'})
+}
+const v17PriorMap=drawMap;
+drawMap=function(){v17PriorMap();v17StyleMap()};
+const v17PriorFresh=fresh;
+fresh=function(f=0){v17PriorFresh(f);if(s)v17State()};
+const v17PriorSave=save,v17PriorLoad=load,v17PriorQuiet=saveQuiet;
+save=function(){try{localStorage.setItem(V17_SAVE_KEY,JSON.stringify(s));say('Кампания XVII сохранена')}catch(e){say('Сохранение недоступно — экспортируйте JSON')}};
+load=function(){try{let raw=JSON.parse(localStorage.getItem(V17_SAVE_KEY)||localStorage.getItem(V16_SAVE_KEY)||'null');if(!raw)throw Error('Нет сохранения');restoreSave(raw);v17State();drawAll();say('Кампания XVII загружена')}catch(e){say('Не удалось загрузить: '+e.message)}};
+saveQuiet=function(){try{if(s)localStorage.setItem(V17_SAVE_KEY,JSON.stringify(s))}catch(e){}};
+// AI does not receive resources for free: national policies are automatically selected, subject to the same treasury costs.
+const v17PriorAI=computerTurn;
+computerTurn=function(){v17PriorAI();if(!s)return;const v=v17State();for(let f=0;f<F.length;f++){if(f===s.player||!regOf(f).length)continue;const preferred=NATIONAL[f]?.quality==='navy'?'maritime':NATIONAL[f]?.quality==='army'?'continental':NATIONAL[f]?.quality==='research'?'academy':'mercantile';if(v.policies[f])continue;if(s.gold[f]>=260){s.gold[f]-=130;v.policies[f]=preferred}}};
+function v17Css(){if(document.getElementById('v17styles'))return;const style=document.createElement('style');style.id='v17styles';style.textContent=`
+ :root{--gold:#d1ac69;--cream:#f4e3bd}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif!important}.brand h1,.panel h2,.v15-rail h3{font-family:Georgia,serif!important}
+ #map{background:radial-gradient(ellipse at 46% 38%,#285a75,#10374c 64%,#091d29)!important}#oceantexture{opacity:.26}.province{stroke-width:.7px!important;stroke:#3b3130!important}.province.focus{stroke:#ffe5ac!important;stroke-width:2px!important}.mapframe{box-shadow:0 14px 36px #0008,inset 0 0 30px #0006!important}
+ .v17-sectionhead{border-bottom:1px solid #78603e;margin:5px 0 12px;padding-bottom:9px}.v17-sectionhead h3,.v17-sectionhead h2{font:700 23px Georgia,serif;color:#efdbb2;margin:0 0 4px}.v17-sectionhead small{color:#bac6ca;font-size:12px}
+ .v17-policygrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.v17-policycard,.v17-techcard,.v17-kit{background:linear-gradient(180deg,#1b2c38,#111c25);border:1px solid #6d593a;border-radius:8px;padding:10px}.v17-policycard.chosen{box-shadow:inset 0 0 0 2px #c1a36a}.v17-policycard h3{font:700 19px Georgia,serif;margin:6px 0;color:#ead4a9}.v17-policycard p{font-size:12px;color:#c2cbd0;min-height:46px}.v17-policy-plate img{width:100%;height:130px;object-fit:cover}.v17-policycard button{margin-top:10px;width:100%}
+ .v17-mod{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:4px 0;border-bottom:1px solid #46505c6b;font-size:12px}.v17-mod span{color:#b6c9d0}.v17-mod b{color:#9fce99;white-space:nowrap}.v17-status-note,.v17-kit-summary,.v17-note{margin-top:10px;padding:10px;background:#11212c;border-left:3px solid #b79454;color:#c5d0d4;font-size:12px}
+ .v17-techgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.v17-techcard img,.v17-kit img{width:100%;height:112px;object-fit:cover;border-radius:5px;border:1px solid #9c835c}.v17-techcard b{display:block;color:#efd9ab;font:700 16px Georgia,serif;margin:7px 0}.v17-techcard small,.v17-kit small{display:block;color:#b8c5c9;margin-bottom:8px}.v17-techcard button{width:100%;margin-top:8px}
+ .v17-kitgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}.v17-kit strong{display:block;min-height:38px;font-family:Georgia,serif;color:#eed7aa}.v17-kit button{width:100%;margin-top:8px;font-size:11px}.v17-outfit{padding:12px 0}
+ .v17-admiral{display:flex;gap:14px;align-items:center;margin:0 0 12px;padding:10px;border:1px solid #735b3a;border-radius:8px;background:linear-gradient(180deg,#1c2f3c,#101b24)}.v17-admiral img{width:94px;height:106px;object-fit:cover;border-radius:6px;border:1px solid #ceb47f}.v17-admiral h3{margin:4px 0;font:700 22px Georgia,serif;color:#f0d6a4}.v17-admiral small{color:#a8bdc2}.v17-admiralmods{display:flex;gap:20px;flex-wrap:wrap;margin-top:7px}.v17-ship-designer{padding:12px 14px;border:1px solid #77603c;border-radius:10px;background:linear-gradient(180deg,#182b38,#0e1a24);margin-bottom:13px}.v17-design-grid{display:grid;grid-template-columns:minmax(400px,1fr) 320px;gap:12px}.v17-canvas-shell{position:relative;background:linear-gradient(#16415d,#102230);border:1px solid #90754b;border-radius:6px;overflow:hidden}.v17-canvas-shell canvas{width:100%;height:auto;display:block;touch-action:none;cursor:grab}.v17-overprint{position:absolute;left:6px;bottom:6px;background:#0a1920cf;padding:6px 9px;color:#e2d5b4;font-size:11px}.v17-design-controls h3{margin:0 0 8px;font:700 18px Georgia,serif}.v17-design-controls select{margin-bottom:8px}.v17-design-controls button{margin-bottom:8px}.v17-buttonrow{display:flex;gap:5px}.v17-buttonrow button{flex:1;font-size:11px;padding:9px 4px}
+ @media(max-width:1400px){.v17-policygrid{grid-template-columns:repeat(2,minmax(0,1fr))}.v17-techgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.v17-kitgrid{grid-template-columns:repeat(3,minmax(0,1fr))}.v17-design-grid{grid-template-columns:1fr}}
+ `;document.head.appendChild(style)}
+v17Css();
+
+
+// The opening resembles the reference: continental overview. Any province remains zoomable to ×420.
+const v17PreviousNewGame=newGame;
+newGame=function(){v17PreviousNewGame();if(!s)return;zoom=1.04;panX=0;panY=0;updateTransform();v6scaleLabel()};
+// Real map-mode legend and relief marks, always outside the clickable province layer.
+const v17PrevMapDecor=v17StyleMap;
+v17StyleMap=function(){v17PrevMapDecor();const world=document.getElementById('world');if(!world)return;let g=document.getElementById('v17-mountains');if(g)return;g=document.createElementNS('http://www.w3.org/2000/svg','g');g.setAttribute('id','v17-mountains');g.setAttribute('pointer-events','none');let marks=N.filter(x=>x.terrain==='mountain'||x.terrain==='hills').filter((x,i)=>i%9===0).slice(0,180);g.innerHTML=marks.map(x=>`<path d="M${x.x-2},${x.y+2} l2,-4 l2,4" stroke="#e5e1c8" stroke-width=".8" fill="none" opacity=".4"/>`).join('');world.appendChild(g)};
+// Keep self-identification consistent: previous game title left over from XVI.
+const v17BrandOriginal=drawAll;
+drawAll=function(){v17BrandOriginal();const el=document.querySelector('.brand .edition');if(el)el.textContent='XVII'};
+
+// The old decorative ocean overlay was multiplied by high zoom and obscured coastlines.
+v14MapDecor=function(){};
+const v17OldFreshView=fresh;
+fresh=function(f=0){v17OldFreshView(f);if(s){zoom=1.04;panX=0;panY=0;updateTransform();v6scaleLabel();document.getElementById('v14decor')?.remove()}};
+
+// Historical-style flag heraldry in the command bar, without copying proprietary game assets.
+function v17FlagData(f){let main=F[f]?.color||'#547180';let svg;if(f===0){svg='<rect width="100" height="65" fill="#142e66"/><path d="M-12 -8L112 73M112 -8L-12 73" stroke="#faf8ea" stroke-width="16"/><path d="M-12 -8L112 73M112 -8L-12 73" stroke="#d3423c" stroke-width="7"/><path d="M50 0V65M0 32H100" stroke="#f4ead8" stroke-width="20"/><path d="M50 0V65M0 32H100" stroke="#ce3432" stroke-width="10"/>'}else{svg=`<rect width="100" height="65" fill="${main}"/><path d="M10 10H90V55H10Z" fill="none" stroke="#d8c59c" stroke-width="2"/><text x="50" y="43" fill="#f8ead0" text-anchor="middle" font-family="Georgia" font-size="28">${f%2?'♜':'✠'}</text>`};return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 65">${svg}</svg>`)}
+const v17PriorUI=drawAll;
+drawAll=function(){v17PriorUI();if(!s)return;const brand=document.querySelector('.brand');if(brand){let fl=document.getElementById('v17-countryflag');if(!fl){fl=document.createElement('img');fl.id='v17-countryflag';fl.alt='Флаг державы';fl.title='Открыть государственный совет';fl.onclick=()=>{tab='court';drawAll()};brand.insertBefore(fl,brand.firstChild)}let url=v17FlagData(s.player);if(fl.src!==url)fl.src=url}
+ const labelAllowed=['Швеция','Франция','Испания','Россия','Австрия','Пруссия','Речь Посполитая','Османская империя','Англия','Великобритания','Португалия','Нидерланды','Дания'];for(const n of document.querySelectorAll('#towns .majorlabel')){const name=n.textContent.trim();n.style.display=zoom<2.5&&!labelAllowed.some(x=>name.includes(x))&&!n.classList.contains('focus')?'none':''}}
+const v17MoreStyle=document.createElement('style');v17MoreStyle.textContent=`.brand{position:relative;padding-left:74px!important;min-height:59px;display:flex;flex-direction:column;justify-content:center}#v17-countryflag{position:absolute;left:0;top:1px;width:65px;height:45px;object-fit:cover;border:2px solid #cba86a;border-radius:4px;box-shadow:0 2px 14px #0007;cursor:pointer}#v17-countryflag:hover{filter:brightness(1.17)}.mapframe .majorlabel{paint-order:stroke}.v17-canvas-shell{min-height:380px}`;document.head.appendChild(v17MoreStyle);
+/* XVIII · War council, regimental staffing, ship fitting, statecraft & tactical map */
+const V18_KEY='imperii_parusov_v18_save';
+const V18_TECHS=[
+ ['v18_recruit_census','Рекрутские реестры','Государственные реформы',['cadastre'],148,4,28,{armyCost:.96,manpower:1.08}],
+ ['v18_inland_post','Почтовые тракты','Логистика',['roads'],164,5,30,{armySpeed:1.05,supply:1.08}],
+ ['v18_wagon_park','Королевский обозный парк','Логистика',['magazine'],196,6,42,{armyLoss:.92,supply:1.12}],
+ ['v18_artisan_training','Гильдейская подготовка мастеров','Хозяйство',['manufactory'],172,5,34,{arsenalSpeed:1.10,arsenalCost:.96}],
+ ['v18_quartz_glass','Точное стеклоделие','Образование',['academies'],178,5,42,{research:1.04,education:1.08,gunAccuracy:1.03}],
+ ['v18_cartographer','Королевские картографы','Образование',['navigation'],183,6,45,{research:1.05,shipSpeed:1.04,armySpeed:1.03}],
+ ['v18_military_surgeons','Полковые хирурги','Пехотные формирования',['infantry_forms'],193,6,41,{armyLoss:.90,infantryDef:1.04}],
+ ['v18_battle_drums','Сигнальные барабаны','Пехотные формирования',['drill'],142,4,27,{infantryDef:1.04,regimentTime:.94}],
+ ['v18_hardened_steel','Закалённые клинки','Пехотное оружие',['flintlock'],173,5,40,{infAttack:1.06,gunCost:1.02}],
+ ['v18_rapid_ramrods','Усовершенствованные шомпола','Пехотное оружие',['flintlock'],196,5,43,{infAttack:1.09,arsenalCost:1.03}],
+ ['v18_siege_workshops','Подвижные осадные мастерские','Артиллерия и осады',['siege'],202,6,45,{artillery:1.07,armySpeed:1.03}],
+ ['v18_shell_quality','Стандарты порохового заряда','Морская артиллерия',['gunnery'],218,6,49,{gunDamage:1.08,gunAccuracy:1.04,gunCost:1.03}],
+ ['v18_bore_gauges','Калибровочные шаблоны','Морская артиллерия',['v18_shell_quality'],236,7,55,{gunPen:1.08,gunRange:1.04,gunReload:1.03}],
+ ['v18_recoil_tackle','Противооткатные тали','Морская артиллерия',['guncarriages'],231,7,53,{gunReload:1.09,gunAccuracy:1.03,shipCost:1.02}],
+ ['v18_bilge_pumps','Усовершенствованные осушительные насосы','Кораблестроение',['shipyards'],218,6,48,{shipHull:1.08,shipTime:1.03}],
+ ['v18_hull_patterns','Типовые шаблоны корпусов','Кораблестроение',['shipyards'],212,6,46,{shipTime:.92,shipCost:.97,shipHull:1.02}],
+ ['v18_fleet_supply','Эскадренное снабжение','Флот',['navigation'],224,7,50,{supply:1.08,shipSpeed:1.04,navalPower:1.03}],
+ ['v18_signals','Боевые сигнальные таблицы','Флот',['signals'],238,7,57,{navalPower:1.07,gunAccuracy:1.05}],
+ ['v18_port_insurance','Портовая страховая палата','Морская торговля',['insurance'],208,6,46,{trade:1.08,shipCost:.97}],
+ ['v18_coastal_merchants','Каботажные торговые линии','Морская торговля',['convoys'],190,6,40,{trade:1.07,supply:1.05}],
+ ['v18_depot_inspections','Инспекция армейских складов','Государственные реформы',['logistics'],204,6,44,{armyLoss:.94,supply:1.09,armyCost:1.02}],
+ ['v18_auditors','Контроль государственных заказов','Государственные реформы',['banking'],219,6,47,{arsenalCost:.94,trade:1.04}]
+];
+Object.assign(BONUS_NAMES,{manpower:'Резерв рекрутов',armyLoss:'Потери армии',supply:'Эффективность снабжения',shipHull:'Прочность корпуса',gunPen:'Бронепробитие орудий',gunRange:'Дальность стрельбы',gunDamage:'Урон артиллерии',gunReload:'Скорость перезарядки',gunAccuracy:'Точность артиллерии',arsenalSpeed:'Выпуск мануфактур',arsenalCost:'Себестоимость производства',regimentTime:'Подготовка полков',infantryDef:'Оборона пехоты'});
+for(const [id,name,cat,req,cost,time,eduMin,mods] of V18_TECHS){
+ if(!TECH.some(t=>t.id===id))TECH.push({id,name,cat,req,cost,time,eduMin,mods,
+ desc:Object.entries(mods).map(([k,val])=>`${BONUS_NAMES[k]||k}: ${val<1?'−':'+'}${Math.round(Math.abs(val-1)*100)}%`).join(' · ')});
+}
+const V18_MINISTRIES={
+ military:{title:'Инспекция военного ведомства',label:'Военная реформа',cost:165,mods:{armyCost:.96,infantryDef:1.05,regimentTime:.96},upkeep:7},
+ navy:{title:'Реформа Адмиралтейства',label:'Морская реформа',cost:195,mods:{shipTime:.94,navalPower:1.05,gunAccuracy:1.04},upkeep:9},
+ commerce:{title:'Купеческая палата',label:'Торговая реформа',cost:150,mods:{trade:1.08,arsenalCost:.97},upkeep:7},
+ education:{title:'Королевская учёная комиссия',label:'Реформа образования',cost:175,mods:{education:1.11,research:1.06},upkeep:8}
+};
+function v18State(){if(!s)return null;let v=s.v18;
+ if(!v){v={version:18,ministries:{},projects:[],next:19000,aiTicks:0};s.v18=v}
+ v.ministries ||= {};v.projects ||= [];v.next ||=19000;return v}
+const v18OriginalMod=globalMod;
+globalMod=function(f,key){let v=v18OriginalMod(f,key);for(const [id,_,__,___,____,_____,______,mods] of V18_TECHS){if(mods[key]!=null&&has(f,id))v*=mods[key]}
+ const ministry=V18_MINISTRIES[v18State()?.ministries?.[f]];if(ministry?.mods[key]!=null)v*=ministry.mods[key];return v;};
+function v18Ministry(key){const m=V18_MINISTRIES[key],f=s.player,v=v18State();if(!m)return;
+ if(v.ministries[f]===key)return say('Эта комиссия уже действует');
+ if(s.gold[f]<m.cost||s.action<1)return say(`Для реформы нужны ${m.cost} монет и один указ`);
+ s.gold[f]-=m.cost;s.action--;v.ministries[f]=key;log('Корона учредила ведомство: '+m.title);v15Render();drawAll();}
+function v18GovernmentPanel(){const f=s.player,active=v18State().ministries[f];return `<section class="v18-section"><div class="v18-h"><h2>Правительственный совет</h2><small>Реформы имеют реальные коэффициенты и постоянное жалование</small></div><div class="v18-cards">${Object.entries(V18_MINISTRIES).map(([key,m])=>`<article class="v18-card ${active===key?'is-active':''}"><div class="v18-government-art"><img src="${v15Portrait(m.title,'Государственный советник')}" alt="Министр"></div><h3>${m.title}</h3>${Object.entries(m.mods).map(([k,val])=>v18ModLine(k,val)).join('')}<div class="v18-cost">Жалование: ${m.upkeep} ◈ за квартал</div><button ${active===key?'disabled':''} onclick="v18Ministry('${key}')">${active===key?'Действует':`Утвердить · ${m.cost} ◈`}</button></article>`).join('')}</div></section>`;}
+function v18ModLine(k,x){return `<div class="v18-mod"><span>${esc(BONUS_NAMES[k]||k)}</span><strong class="${x<1?'discount':'boost'}">${x<1?'−':'+'}${Math.round(Math.abs(x-1)*100)}%</strong></div>`}
+// Regiment restoration: reserve people, food, and funds are actual, consumed inventory.
+function v18RegStat(r){const base=REGIMENTS[r.type]||REGIMENTS.inf,quota=base.type==='Артиллерия'?120:base.type==='Конница'?500:800;
+ return {base,quota,ratio:Math.max(.05,Math.min(1,(r.headcount||0)/quota)),ammo:Math.max(0,r.v18Ammo??100),fatigue:Math.max(0,r.v18Fatigue??0)};}
+function v18Replenish(regId){if(!own(selected))return say('Выберите собственную провинцию');const r=v15Regiments(selected).find(x=>x.id===regId);if(!r)return;
+ const o=v18RegStat(r),need=Math.max(0,o.quota-r.headcount);if(!need)return say('Численность полка полная');
+ let f=s.player,reserve=s.demography?.manpower?.[selected]??0;let accepted=Math.min(need,Math.floor(reserve),Math.floor(s.gold[f]*10),Math.floor(s.food[f]*8));
+ if(accepted<=0)return say('Не хватает рекрутов, денег или провианта');
+ s.gold[f]-=Math.ceil(accepted/10);s.food[f]-=accepted/8;if(s.demography?.manpower)s.demography.manpower[selected]-=accepted;
+ r.headcount+=accepted;r.morale=Math.min(100,(r.morale||65)+2);log(`${r.name}: пополнение +${accepted} человек, резерв провинции уменьшился.`);v15Render();drawAll();}
+function v18SupplyAmmo(regId){const r=v15Regiments(selected).find(x=>x.id===regId),f=s.player;if(!r||!own(selected))return;
+ const missing=Math.max(0,100-(r.v18Ammo??100)),usable=Math.min(missing,Math.floor((s.equipment[f]?.gunpowder||0)*10));
+ if(usable<1)return say('Недостаточно пороха в арсенале');
+ s.equipment[f].gunpowder-=usable/10;r.v18Ammo=(r.v18Ammo??100)+usable;r.v18Fatigue=Math.max(0,(r.v18Fatigue||0)-5);
+ log(`${r.name}: запас боеприпасов +${usable}%, порох израсходован.`);v15Render();drawAll();}
+function v18RegStatus(){const r=v15SelectedReg();if(!r)return '';const st=v18RegStat(r);return `<section class="v18-section"><div class="v18-h"><h3>Состояние полка · ${esc(r.name)}</h3><small>Фактическая численность влияет на боевую силу</small></div><div class="v18-regmetrics">${v15Gauge('Личный состав',r.headcount,st.quota,'#8cb49e',`${r.headcount} / ${st.quota}`)}${v15Gauge('Боезапас',st.ammo,100,'#d3b87d',Math.round(st.ammo)+'%')}${v15Gauge('Усталость',st.fatigue,100,'#c78077',Math.round(st.fatigue)+'%')}</div><div class="v18-controls"><button onclick="v18Replenish(${r.id})">Пополнить полк</button><button onclick="v18SupplyAmmo(${r.id})">Подвезти боеприпасы</button><button onclick="v15Train(${r.id})">Полевые учения · 21 день</button></div></section>`}
+const v18OldRegPanel=v15RegPanel;
+v15RegPanel=function(){return v18OldRegPanel()+v18RegStatus()};
+const v18OldLandPower=power;
+power=function(p,f,attack=false,where=0){let val=v18OldLandPower(p,f,attack,where);if(!p?.v15Regiments?.length)return val;
+ let regs=p.v15Regiments,rat=regs.reduce((tot,r)=>{let st=v18RegStat(r);return tot+st.ratio*(.72+.28*st.ammo/100)*(1-.18*st.fatigue/100)},0)/regs.length;
+ return val*(.55+.45*rat)*(attack?globalMod(f,'infAttack')/Math.max(.2,v18OriginalMod(f,'infAttack')):1);}
+// Skilled ship crews require supplies and spend 24 in-game days training, then improve actual gunnery and sailing performance.
+function v18CrewStatus(sh){sh.v18Crew||={sailing:Math.max(12,sh.seamanship||20),gunnery:Math.max(12,sh.gunnery||20),boarding:Math.max(12,sh.boarding||18),stamina:85};return sh.v18Crew}
+function v18ShipTrain(shipId,skill){const f=s.player,sh=s.ships.find(x=>x.id===shipId&&x.f===f),v=v18State();if(!sh)return;
+ if(!['sailing','gunnery','boarding'].includes(skill))return;
+ if(v.projects.some(x=>x.kind==='crew'&&x.shipId===shipId))return say('Этот экипаж уже проходит обучение');
+ if(sh.port==null||!N[sh.port]||s.provinces[sh.port].owner!==f)return say('Учения требуют дружественного порта');
+ const gold=skill==='gunnery'?48:35,food=skill==='boarding'?8:5,powder=skill==='gunnery'?4:1;
+ if(s.gold[f]<gold||s.food[f]<food||(s.equipment[f].gunpowder||0)<powder)return say('Недостаточно денег, пороха или провианта');
+ s.gold[f]-=gold;s.food[f]-=food;s.equipment[f].gunpowder-=powder;
+ v.projects.push({id:++v.next,kind:'crew',shipId,skill,remaining:24,f});log(`${sh.name}: начаты учения экипажа (${skill}, 24 дня).`);v15Render();drawAll();}
+function v18CrewPanel(){let sh=s.ships.find(x=>x.id===v15ShipId&&x.f===s.player);if(!sh)return '';
+ const cr=v18CrewStatus(sh),queue=v18State().projects.find(x=>x.shipId===sh.id&&x.kind==='crew');
+ return `<section class="v18-section"><div class="v18-h"><h3>Подготовка экипажа · ${esc(sh.name)}</h3><small>Действует на стрельбу, движение эскадры и абордаж</small></div><div class="v18-regmetrics">${v15Gauge('Артиллеристы',cr.gunnery,100,'#c89e68',Math.round(cr.gunnery)+'%')}${v15Gauge('Парусная команда',cr.sailing,100,'#80b4c1',Math.round(cr.sailing)+'%')}${v15Gauge('Абордажные партии',cr.boarding,100,'#aa8eaa',Math.round(cr.boarding)+'%')}</div>${queue?`<div class="v18-cost">Учения продолжаются: ${queue.remaining} дней</div>`:''}<div class="v18-controls"><button onclick="v18ShipTrain(${sh.id},'gunnery')">Учить артиллеристов</button><button onclick="v18ShipTrain(${sh.id},'sailing')">Парусная подготовка</button><button onclick="v18ShipTrain(${sh.id},'boarding')">Абордажные учения</button></div></section>`;}
+const v18OldShipPanel=v15ShipPanel;
+v15ShipPanel=function(){return v18OldShipPanel()+v18CrewPanel()};
+const v18OldShipPower=v6shipPower;
+v6shipPower=function(sh,admiral){let out=v18OldShipPower(sh,admiral);let c=v18CrewStatus(sh);return out*(.90+.002*c.gunnery)*(.94+.001*c.boarding)*globalMod(sh.f,'gunDamage')/Math.max(.1,v18OriginalMod(sh.f,'gunDamage'));}
+const v18OldSpeed=v8fleetSpeed;
+v8fleetSpeed=function(fleet){let sp=v18OldSpeed(fleet),ships=v8shipsOf(fleet);if(!ships?.length)return sp;const skill=ships.reduce((a,sh)=>a+v18CrewStatus(sh).sailing,0)/ships.length;
+ return sp*(.90+.002*skill)*globalMod(fleet.f,'shipSpeed')/Math.max(.1,v18OriginalMod(fleet.f,'shipSpeed'));};
+const v18OldAdvance=advanceDay;
+advanceDay=function(){v18OldAdvance();if(!s||s.ended)return;const v=v18State();for(const q of v.projects){q.remaining--;if(q.remaining<=0){if(q.kind==='crew'){let sh=s.ships.find(x=>x.id===q.shipId);if(sh){let stats=v18CrewStatus(sh);stats[q.skill]=Math.min(100,stats[q.skill]+14);if(q.skill==='gunnery')sh.gunnery=Math.min(100,(sh.gunnery||20)+10);if(q.skill==='sailing')sh.seamanship=Math.min(100,(sh.seamanship||20)+10);log(`${sh.name}: завершены учения, навык «${q.skill}» +14.`)}}}}
+ v.projects=v.projects.filter(x=>x.remaining>0);
+ if(s.day===1&&s.month%3===1){for(let f=0;f<F.length;f++){const ministry=V18_MINISTRIES[v.ministries[f]];if(ministry)s.gold[f]-=ministry.upkeep}}
+};
+// Province routes model: existing network + warehouse and docks contribute measurable throughput.
+const v18OldSupply=v8supplyOf;
+v8supplyOf=function(i){let q=v18OldSupply(i),p=s?.provinces?.[i];if(!p)return q;
+ const mod=globalMod(p.owner,'supply')/Math.max(.1,v18OriginalMod(p.owner,'supply'));
+ return Math.max(0,Math.min(100,q*mod+(p.depot||0)*2+(p.road||0)*1.5+(N[i]?.port?(p.dock||0)*.6:0)));};
+function v18SupplyScreen(){let f=s.player,provinces=regOf(f).filter(z=>armies(z.p)>0).sort((a,b)=>armies(b.p)-armies(a.p)).slice(0,12),v=v8get();
+ return `<section class="v18-section"><div class="v18-h"><h2>Логистическая карта</h2><small>Снабжение ограничивает силу и длительность походов</small></div><div class="v18-logrow">${provinces.map(z=>{const q=v8supplyOf(z.i),p=z.p;return `<button onclick="selected=${z.i};v15Close();tab='province';drawAll()"><b>${esc(N[z.i].name)}</b><small>${armies(p)} полков · склад ${p.depot||0} · дороги ${p.road||0}</small>${v15Gauge('Снабжение',q,100,q<35?'#c9796e':'#8caf98',Math.round(q)+'%')}</button>`}).join('')}</div><div class="v18-cost">Снабжение зависит от складов, дорог, портов, технологий и политических реформ. Щёлкни по гарнизону, чтобы перейти к региону.</div></section>`;}
+function v18OperationsScreen(){const f=s.player,orders=s.orders.filter(x=>x.f===f),fleets=s.fleets.filter(x=>x.f===f),regi=regOf(f).reduce((acc,z)=>acc+armies(z.p),0),ships=s.ships.filter(x=>x.f===f);
+ return `<section class="v18-section"><div class="v18-h"><h2>Оперативный штаб</h2><small>Один календарь для армий, эскадр, обучения и промышленности</small></div><div class="v18-totals"><div><b>${regi}</b><span>Полков</span></div><div><b>${ships.length}</b><span>Кораблей</span></div><div><b>${fleets.length}</b><span>Эскадр</span></div><div><b>${orders.length}</b><span>Приказов</span></div></div><div class="v18-operation-grid"><div><h3>Военные приказы</h3>${orders.slice(0,18).map(o=>`<div class="v18-operation"><b>${o.kind==='army'?'Сухопутный марш':'Морская операция'}</b><span>${esc(N[o.from]?.name||'?')} → ${esc(N[o.to]?.name||'?')}</span>${v15Gauge('Переход',Math.max(0,o.total-o.remaining),Math.max(1,o.total),'#9db7bd',Math.max(0,o.remaining)+' дн.')}</div>`).join('')||'<small>Действующих маршей пока нет.</small>'}</div><div><h3>Адмиралтейство</h3>${fleets.slice(0,12).map(fl=>`<div class="v18-operation"><b>${esc(fl.name)}</b><span>Судов: ${v8shipsOf(fl).length} · ${Number.isInteger(fl.port)?esc(N[fl.port]?.name||'порт'):'море'}</span></div>`).join('')||'<small>Эскадры не сформированы.</small>'}<div class="v18-controls"><button onclick="v15Switch('fleet')">Перейти во флот</button><button onclick="v15Switch('regiments')">Открыть полки</button></div></div></div></section>`;}
+const v18OldHeader=v15Header;
+v15Header=function(){return v18OldHeader().replace('</nav>',`<button class="${v15OverlayTab==='operations'?'on':''}" onclick="v15Switch('operations')">Штаб</button><button class="${v15OverlayTab==='government'?'on':''}" onclick="v15Switch('government')">Ведомства</button><button class="${v15OverlayTab==='supplyMap'?'on':''}" onclick="v15Switch('supplyMap')">Логистика</button></nav>`)};
+const v18OldRender=v15Render;
+v15Render=function(){if(['operations','government','supplyMap'].includes(v15OverlayTab)){
+ const el=document.getElementById('v15-window');if(!el||!s)return;el.innerHTML=v15Header()+`<div class="v15-h-body">${v15OverlayTab==='operations'?v18OperationsScreen():v15OverlayTab==='government'?v18GovernmentPanel():v18SupplyScreen()}</div>`;return;}
+ v18OldRender();};
+const v18OldRail=v15Rail;
+v15Rail=function(){v18OldRail();const rail=document.getElementById('v15-rail');if(!rail||rail.querySelector('.v18-rail'))return;
+ rail.insertAdjacentHTML('beforeend',`<div class="v18-rail"><button onclick="v15Open('operations')">Оперативный штаб</button><button onclick="v15Open('government')">Министерства</button><button onclick="v15Open('supplyMap')">Сеть снабжения</button></div>`);};
+// Layout and geography: generated strategic overlays use actual terrain and owned port metadata.
+function v18MapLayers(){const world=document.getElementById('world');if(!world||!s)return;
+ let overlay=document.getElementById('v18-geo');if(!overlay){overlay=document.createElementNS('http://www.w3.org/2000/svg','g');overlay.id='v18-geo';overlay.setAttribute('pointer-events','none');world.appendChild(overlay)}
+ const important=N.filter(x=>x.port).filter((x,i)=>i%5===0).slice(0,45);
+ const mountains=N.filter(x=>x.terrain==='mountain').filter((x,i)=>i%7===0).slice(0,95);
+ overlay.innerHTML=`<g class="v18-ports">${important.map(x=>`<circle cx="${x.x}" cy="${x.y}" r="1.9" fill="#d9bc7c" stroke="#182833" stroke-width=".8"/><path d="M${x.x},${x.y-2.6}v4.2 m-2.4,-1 l2.4,2.5 l2.4,-2.5" fill="none" stroke="#e7d2a1" stroke-width=".7"/>`).join('')}</g><g class="v18-peaks">${mountains.map(x=>`<path d="M${x.x-3.2},${x.y+2}l3.2,-5.3 3.2,5.3z" fill="#d2d0bd" stroke="#4e6459" stroke-width=".55" opacity=".60"/>`).join('')}</g>`;
+}
+const v18OldDrawMap=drawMap;
+drawMap=function(){v18OldDrawMap();v18MapLayers()};
+const v18OldZoom=updateTransform;
+updateTransform=function(){v18OldZoom();const el=document.getElementById('v18-geo');if(el){el.style.opacity=zoom<1.8?'.25':zoom<4?'.58':'.86'}};
+// Multiple durable ship variations: stern glazing, gunport bands and rigging react to hull seed.
+const v18OldShipMesh=v8shipMesh;
+v8shipMesh=function(type='frigate',design=null){let m=v18OldShipMesh(type,design);if(!design)return m;
+ const k=(Number(design.modelSeed)||0)>>>0,L=(type==='line'?1.55:type==='frigate'?1.1:type==='transport'?1.16:.82)*11;
+ const beam=(type==='line'?3.4:2.8)*(type==='line'?1.55:type==='frigate'?1.1:type==='transport'?1.16:.82)*.5;
+ const col=['#dbc183','#b5ad8c','#c59561','#d8b76b'][k%4],count=4+(k%4);
+ for(const side of [-1,1]){
+   for(let i=0;i<count;i++){let x=-L*.39+(i+.5)*L*.77/count;
+     v8cube(m,x,side*beam*.91,.05,.18,.07,.21,'#25272b');
+     v8cube(m,x,side*beam*.93,.19,.23,.065,.038,col);
+   }
+   v8seg(m,[L*.32,side*beam*.78,.46],[L*.42,side*beam*.66,.93],col,1.1);
+ }
+ for(let i=0;i<3;i++){const x=L*(i-1)*.22;
+  v8seg(m,[x,0,3.3],[x+((k>>i)&3)*.12,beam*.62,.35],'#ab9f80',.55);
+  v8seg(m,[x,0,3.3],[x-((k>>(i+3))&3)*.12,-beam*.62,.35],'#ab9f80',.55);
+ }
+ return m;};
+// Computer states develop strategic priorities once per quarter, respecting treasury limits and supply position.
+const v18OldComputer=computerTurn;
+computerTurn=function(){v18OldComputer();if(!s)return;const v=v18State();v.aiTicks++;
+ for(let f=0;f<F.length;f++){if(f===s.player)continue;const regions=regOf(f);if(!regions.length)continue;
+  if(!v.ministries[f]&&s.gold[f]>250){let q=NATIONAL[f]?.quality||'trade';let choice=q==='navy'?'navy':q==='army'?'military':q==='research'?'education':'commerce';s.gold[f]-=V18_MINISTRIES[choice].cost;v.ministries[f]=choice;}
+  if(s.gold[f]>220){let frontier=regions.filter(x=>N[x.i].adj?.some(adj=>s.provinces[adj]?.owner!==f));let candidate=frontier.sort((a,b)=>armies(b.p)-armies(a.p))[0]||regions.find(z=>N[z.i].port)||regions[0];
+   if(candidate){const p=candidate.p;if((p.depot||0)<2&&armies(p)>1){s.gold[f]-=95;p.depot=(p.depot||0)+1;}else if((p.road||0)<2){s.gold[f]-=80;p.road=(p.road||0)+1;}}
+  }
+ }
+};
+function v18Portrait(name,role){const seed=v15Hash('XVIII '+name+' '+role),hue=seed%360,coat=['#293f59','#5a3930','#365246','#5c4939'][seed%4];
+ const existing=v15Portrait(name,role);return existing;}
+// The current generative renderer already produces deterministic SVG portraits; expose it on the court database for all persons.
+for(let i=0;i<NATIONAL.length;i++){NATIONAL[i].v18Portrait=v18Portrait(NATIONAL[i].ruler,'Правитель')}
+for(const ad of ADVISERS){ad.v18Portrait=v18Portrait(ad.name,ad.role)}
+const v18OldFresh=fresh;
+fresh=function(f=0){v18OldFresh(f);if(s)v18State()};
+const v18OldSave=save;
+save=function(){try{v18State();localStorage.setItem(V18_KEY,JSON.stringify(s));say('Кампания XVIII сохранена')}catch(e){say('Ошибка сохранения: используйте экспорт JSON')}};
+const v18OldLoad=load;
+load=function(){try{let x=localStorage.getItem(V18_KEY)||localStorage.getItem(V17_SAVE_KEY);if(!x)throw Error('Сохранение отсутствует');restoreSave(JSON.parse(x));v18State();drawAll();say('Кампания XVIII загружена')}catch(e){say('Ошибка загрузки: '+e.message)}};
+saveQuiet=function(){try{if(s)localStorage.setItem(V18_KEY,JSON.stringify(s))}catch(e){}};
+const v18OldAll=drawAll;
+drawAll=function(){v18OldAll();const el=document.querySelector('.brand .edition');if(el)el.textContent='XVIII'};
+const v18CSS=document.createElement('style');v18CSS.id='v18-css';v18CSS.textContent=`
+:root{--gold:#d7b77b;--cream:#f2dfb9;--ink:#eee8da}
+body{font-family:Georgia,'Palatino Linotype',serif!important}
+button,input,select,.mini,.note{font-family:'Segoe UI',Arial,sans-serif!important}
+.brand h1{font-family:Georgia,'Palatino Linotype',serif!important;letter-spacing:1px}
+.mapframe{border:1px solid #94784b!important;box-shadow:0 10px 36px #0009,inset 0 0 60px #030c16!important}
+.panel{border-color:#785e3d!important;background:linear-gradient(170deg,#182c38,#0d1821)!important}
+#map{filter:saturate(1.1) contrast(1.05)}
+.v18-section{border:1px solid #6a573b;border-radius:10px;padding:14px;margin-bottom:14px;background:linear-gradient(155deg,#192b38,#0d1922);box-shadow:inset 0 1px 0 #d8b87815}
+.v18-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-bottom:1px solid #635239;padding-bottom:10px;margin-bottom:12px;flex-wrap:wrap}.v18-h h2,.v18-h h3{font:700 25px Georgia,serif;color:#f0d6a3;margin:0}.v18-h h3{font-size:21px}.v18-h small{color:#b7c7ce}
+.v18-cards{display:grid;grid-template-columns:repeat(2,minmax(230px,1fr));gap:12px}.v18-card{border:1px solid #675637;border-radius:9px;padding:10px;background:linear-gradient(175deg,#253746,#101a23)}.v18-card.is-active{border-color:#bfa36d}.v18-government-art{height:132px;overflow:hidden;position:relative;background:#162332;border:1px solid #6d6045;border-radius:7px}.v18-government-art img{max-height:135px;width:100%;object-fit:cover}.v18-government-art svg{width:100%;height:100%}.v18-card h3{font:700 19px Georgia,serif;color:#eedab0}.v18-mod{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0;font-size:12px}.v18-mod span{color:#c1cbd0}.v18-mod strong{color:#a4d3a7}.v18-cost{font-size:12px;color:#d6c199;margin:10px 0}.v18-card button{margin-top:8px;width:100%}
+.v18-regmetrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.v18-controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.v18-controls button{flex:1;min-width:144px}
+.v18-totals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:16px}.v18-totals div{padding:10px;background:#10212d;border:1px solid #4e6070;border-radius:8px;text-align:center}.v18-totals b{display:block;color:#ead09a;font:700 29px Georgia,serif}.v18-totals span{color:#bac8ce;font-size:12px}
+.v18-operation-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.v18-operation{margin-bottom:8px;padding:8px;background:#122530;border:1px solid #4b5961;border-radius:7px}.v18-operation b{display:block;color:#e9d8b6}.v18-operation span{color:#bdcbd0;font-size:12px}
+.v18-logrow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.v18-logrow button{padding:9px;text-align:left}.v18-logrow button b{display:block}.v18-logrow button small{display:block;color:#c5cfcc}
+.v18-rail{display:grid;gap:6px;margin-top:8px}.v18-rail button{background:linear-gradient(180deg,#274253,#132632);border-color:#846d46}
+.v18-ports,.v18-peaks{transition:opacity .15s}
+@media(max-width:1100px){.v18-cards,.v18-operation-grid,.v18-logrow{grid-template-columns:1fr}.v18-regmetrics{grid-template-columns:1fr}}
+`;document.head.appendChild(v18CSS);
+/* XVIII · Rendering refinement and manpower integration */
+const v18BeforePop=v10PopulationMonth;
+v10PopulationMonth=function(){v18BeforePop();if(!s?.demography)return;
+ let d=s.demography;
+ for(let i=0;i<N.length;i++){
+   let owner=s.provinces[i]?.owner;if(!Number.isInteger(owner))continue;
+   let multiplier=globalMod(owner,'manpower');
+   if(multiplier>1){let bonus=Math.round((d.population[i]||0)*.00016*(multiplier-1));
+     d.manpower[i]=Math.min(Math.round((d.population[i]||0)*.075),Math.max(0,(d.manpower[i]||0)+bonus));
+   }
+ }
+};
+// Infantry defensive doctrine is applied to actual combat power; reserve losses have tangible effect.
+const v18BeforeLandDefense=power;
+power=function(p,f,attack=false,where=0){let value=v18BeforeLandDefense(p,f,attack,where);if(!attack&&p){let infantry=UNITKEYS.some(k=>REGIMENTS[k]?.type==='Пехота'&&countUnit(p,k)>0);
+ if(infantry)value*=globalMod(f,'infantryDef')/Math.max(.1,v18OriginalMod(f,'infantryDef'));}
+ return value;};
+const v18BeforeMilitaryLoss=militaryLoss;
+militaryLoss=function(p,loss){let f=p?.owner;let adj=loss;
+ if(Number.isInteger(f)&&f>=0&&f<F.length)adj=Math.floor(loss*globalMod(f,'armyLoss'));
+ return v18BeforeMilitaryLoss(p,adj);};
+const v18VisualFix=document.createElement('style');v18VisualFix.id='v18-visualfix';v18VisualFix.textContent=`
+.v18-government-art{height:132px!important;background:linear-gradient(110deg,#2a3b4a,#111d26)!important;display:flex;justify-content:center;align-items:center}
+.v18-government-art img{display:block!important;width:112px!important;height:128px!important;max-height:128px!important;object-fit:contain!important;border-left:2px solid #bea169;border-right:2px solid #bea169;box-shadow:0 0 22px #0005}
+.v18-card h3{min-height:41px;margin-bottom:8px}.v18-section .v15-gauge{max-width:300px}
+#map{background:radial-gradient(ellipse at 35% 24%,#2e6882,#0c3149 63%,#0c2231)!important}
+`;
+document.head.appendChild(v18VisualFix);
+
+/* XIX — Unified technology effects, original art, operational planning, 3D and production. */
+const V19_VERSION='XIX', V19_SAVE='imperii_parusov_v19_save';
+const V19_LABELS={research:'Скорость исследований',education:'Рост образования',arsenalSpeed:'Скорость производства',arsenalCost:'Себестоимость вооружения',shipTime:'Время строительства кораблей',shipCost:'Стоимость кораблей',shipHull:'Прочность кораблей',shipSpeed:'Скорость эскадр',gunDamage:'Урон корабельной артиллерии',gunAccuracy:'Точность корабельных орудий',gunPen:'Пробитие орудий',gunRange:'Дальность корабельного огня',gunReload:'Скорость перезарядки',gunCost:'Стоимость корабельных орудий',navalPower:'Сила флота',armyCost:'Стоимость набора полков',infAttack:'Атака пехоты',infantryDef:'Оборона пехоты',cavalry:'Атака конницы',artillery:'Атака артиллерии',supply:'Эффективность снабжения',armySpeed:'Скорость марша',armyLoss:'Потери от истощения',regimentTime:'Срок подготовки полков',trade:'Торговые доходы',industry:'Эффективность мануфактур',fort:'Прочность крепостей',manpower:'Пополнение рекрутов'};
+Object.assign(BONUS_NAMES,V19_LABELS);
+const V19_LEGACY={
+ 'Образование':{research:1.007,education:1.008},'Хозяйство':{industry:1.006,arsenalCost:.996},'Морская торговля':{trade:1.007,shipCost:.997},'Управление':{research:1.004,trade:1.003},'Государственные реформы':{research:1.004,armyCost:.996},'Логистика':{supply:1.008,armySpeed:1.004},'Флот':{navalPower:1.006,shipSpeed:1.004},'Кораблестроение':{shipTime:.996,shipHull:1.005},'Морская артиллерия':{gunDamage:1.006,gunRange:1.004},'Артиллерия и осады':{artillery:1.007,armyLoss:.997},'Пехотное оружие':{infAttack:1.007,regimentTime:.996},'Пехотные формирования':{infantryDef:1.006,armyCost:.998},'Сухопутная война':{infAttack:1.006,infantryDef:1.005},'Конница':{cavalry:1.008,armySpeed:1.003}
+};
+const V19_RESEARCH=[
+ ['v19_military_census','Послужные списки и военные реестры','Государственные реформы',['v18_recruit_census'],185,5,38,{manpower:1.07,regimentTime:.96,armyCost:.99}],
+ ['v19_tax_observatory','Государственная налоговая инспекция','Хозяйство',['cadastre'],191,6,36,{trade:1.07,industry:1.05,armyCost:1.02}],
+ ['v19_mint_standards','Монетные стандарты короны','Управление',['banking'],195,6,42,{trade:1.07,arsenalCost:.97,shipCost:.99}],
+ ['v19_war_bonds','Военные займы и казначейские облигации','Государственные реформы',['banking'],212,6,43,{arsenalCost:.95,armyCost:.98,shipCost:1.03}],
+ ['v19_ship_timber','Выдержка судостроительного дуба','Кораблестроение',['v15_oak'],218,6,47,{shipHull:1.09,shipCost:1.04,shipTime:1.02}],
+ ['v19_balanced_hull','Балансировка киля и шпангоутов','Кораблестроение',['v18_hull_patterns'],243,7,56,{shipSpeed:1.07,shipHull:1.05,shipTime:1.02}],
+ ['v19_copper_fasteners','Медные крепления обшивки','Кораблестроение',['coppering'],225,7,54,{shipHull:1.05,shipSpeed:1.03,shipCost:1.04}],
+ ['v19_sail_cut','Крой парусов для манёвра','Флот',['rigging'],188,5,42,{shipSpeed:1.08,navalPower:1.03,shipCost:1.02}],
+ ['v19_boarding_drill','Школа абордажных команд','Флот',['navalcollege'],225,6,50,{navalPower:1.08,regimentTime:.98,armyLoss:.99}],
+ ['v19_convoy_signals','Конвойная сигнализация','Флот',['signals'],206,6,49,{shipSpeed:1.04,trade:1.08,navalPower:1.03}],
+ ['v19_broadside_sequence','Последовательная бортовая стрельба','Морская артиллерия',['v15_quickfire'],251,7,60,{gunReload:1.10,gunAccuracy:1.06,gunCost:1.02}],
+ ['v19_gunnery_tables','Баллистические таблицы','Морская артиллерия',['v18_bore_gauges'],245,7,60,{gunRange:1.10,gunAccuracy:1.07,gunReload:.98}],
+ ['v19_breech_proof','Испытания казёнников','Морская артиллерия',['v17_iron_liners'],226,6,54,{gunPen:1.11,gunDamage:1.05,gunCost:1.06}],
+ ['v19_foundry_calipers','Орудийные калибры и штангенциркули','Морская артиллерия',['gunfoundries'],224,6,49,{gunAccuracy:1.06,gunCost:.94,arsenalSpeed:1.03}],
+ ['v19_crew_replacement','Резервные расчёты орудий','Морская артиллерия',['navalcollege'],209,6,50,{gunReload:1.08,armyLoss:.96,shipCost:1.01}],
+ ['v19_horse_remount','Кавалерийские ремонтные станции','Конница',['v17_cavalry_remount'],216,6,48,{cavalry:1.09,armySpeed:1.04,armyCost:1.02}],
+ ['v19_regiment_musicians','Полковые сигналы и барабанщики','Пехотные формирования',['v17_field_musicians'],207,6,46,{infantryDef:1.08,regimentTime:.95,armyCost:1.02}],
+ ['v19_mobile_hospitals','Подвижные лазареты','Пехотные формирования',['v18_military_surgeons'],235,6,50,{armyLoss:.88,infantryDef:1.05,armySpeed:.99}],
+ ['v19_cartridge_boxes','Стандарты патронных сумок','Пехотное оружие',['v15_cartridge'],183,5,43,{infAttack:1.08,regimentTime:.96,arsenalCost:1.02}],
+ ['v19_bayonet_forge','Механизация ковки штыков','Пехотное оружие',['v15_bayonet'],212,6,52,{arsenalSpeed:1.10,arsenalCost:.93,infAttack:1.02}],
+ ['v19_siege_trains','Осадные поезда и тяговые команды','Артиллерия и осады',['siege'],234,7,51,{artillery:1.11,armySpeed:.98,supply:1.06}],
+ ['v19_field_fuses','Полевые огневые трубки','Артиллерия и осады',['artillery'],221,6,49,{artillery:1.09,gunDamage:1.03,arsenalCost:1.02}],
+ ['v19_bridge_pontoons','Понтонные парки','Логистика',['roads'],215,6,48,{armySpeed:1.08,supply:1.07,armyCost:1.02}],
+ ['v19_granary_audit','Учёт армейских провиантских складов','Логистика',['magazine'],199,6,46,{supply:1.12,armyLoss:.93,trade:1.02}],
+ ['v19_wagon_wheels','Стандартизованные колёса обозов','Логистика',['v18_wagon_park'],220,6,52,{armySpeed:1.08,supply:1.08,arsenalCost:.98}],
+ ['v19_geodesy','Геодезические академии','Образование',['v17_survey_cadets'],238,7,55,{research:1.10,armySpeed:1.03,education:1.04}],
+ ['v19_academy_press','Учебные гравированные атласы','Образование',['v17_textbook_press'],218,6,52,{research:1.07,education:1.11,arsenalCost:1.01}],
+ ['v19_engineering_schools','Школы прикладной механики','Образование',['universities'],235,6,55,{education:1.08,research:1.06,arsenalSpeed:1.08}],
+ ['v19_mine_ventilation','Вентиляция шахт','Хозяйство',['mining'],199,6,46,{industry:1.10,arsenalCost:.97,trade:1.02}],
+ ['v19_rolling_mills','Прокатные станки и листовое железо','Хозяйство',['blastfurnace'],256,7,58,{industry:1.09,arsenalSpeed:1.09,arsenalCost:.97}],
+ ['v19_coastal_insurance','Страхование портовых грузов','Морская торговля',['insurance'],215,6,52,{trade:1.10,shipCost:.98,shipSpeed:1.02}],
+ ['v19_naval_brokerage','Морская товарная биржа','Морская торговля',['trade'],220,6,49,{trade:1.11,shipCost:.97,arsenalCost:1.01}],
+ ['v19_diplomatic_couriers','Постоянные дипломатические курьеры','Управление',['diplomacy'],201,6,45,{trade:1.05,research:1.04,armyCost:.99}],
+ ['v19_staff_maps','Военные штабные карты','Государственные реформы',['staffcollege'],218,6,51,{armySpeed:1.06,infantryDef:1.05,supply:1.03}]
+];
+const V19_NEW={};for(const [id,name,cat,req,cost,time,eduMin,mods] of V19_RESEARCH){V19_NEW[id]=mods;TECH.push({id,name,cat,req,cost,time,eduMin,mods,desc:'Модификаторы указаны на карточке и участвуют в расчётах кампании.'})}
+const V19_OLD=new Map();for(const t of TECH){if(!t.id.startsWith('v19_')&&!/^(v15_|v17_|v18_)/.test(t.id))V19_OLD.set(t.id,V19_LEGACY[t.cat]||{research:1.003,trade:1.003})}
+const V19_MODS={};for(const list of [V15_RESEARCH,V17_TECHS,V18_TECHS])for(const item of list){V19_MODS[item[0]]=item[item.length-1]}
+for(const [id,m] of Object.entries(V19_NEW)) V19_MODS[id]=m;
+for(const [id,m] of V19_OLD) V19_MODS[id]=m;
+const v19GlobalBefore=globalMod;const v19ModCache=new Map();
+function v19Aggregate(f){const tech=s?.tech?.[f]||[],sig=tech.length+':'+tech.slice(-3).join('/');let cache=v19ModCache.get(f);if(cache?.sig===sig)return cache.mods;const mods={};for(const id of tech){const row=V19_NEW[id]||V19_OLD.get(id);if(!row)continue;for(const [key,val] of Object.entries(row))mods[key]=(mods[key]||1)*val}v19ModCache.set(f,{sig,mods});return mods}
+globalMod=function(f,key){const normal=v19GlobalBefore(f,key);return normal*(v19Aggregate(f)[key]||1)};
+function v19fmtMod(k,v){return `<div class="v19-effect"><span>${esc(V19_LABELS[k]||BONUS_NAMES[k]||k)}</span><strong class="${v<1?'minus':'plus'}">${v<1?'−':'+'}${(Math.abs(1-v)*100).toFixed(Math.abs(v-1)<.01?1:0)}%</strong></div>`}
+function v19hash(x){let h=2166136261;for(let i=0;i<x.length;i++)h=Math.imul(h^x.charCodeAt(i),16777619);return h>>>0}
+const V19_IMG_CACHE=new Map();
+function v19TechPicture(t){if(V19_IMG_CACHE.has(t.id))return V19_IMG_CACHE.get(t.id);const seed=v19hash(t.id),kind=/gun\d+|пушк|артилл|оруди|батар|лафет/i.test(t.id+' '+t.name)?'cannon':/кораб|верф|парус|флот|эскадр|такел|морск|nav|ship/i.test(t.id+' '+t.name+' '+t.cat)?'ship':/мушкет|штык|пехот|rifle|cartridge|inf/i.test(t.id+' '+t.name+' '+t.cat)?'musket':/кавал|конн|лошад|horse/i.test(t.id+' '+t.name)?'horse':/склад|логист|дорог|мост|supply/i.test(t.name+' '+t.cat)?'wagon':/школ|книг|универ|образ|академ|education/i.test(t.name+' '+t.cat)?'book':'tools';const hues=['#b39463','#879b96','#ab7552','#7b8e9f','#b0a47b'][seed%5],stroke=['#302d2a','#353d41','#4b342d'][seed%3];let shape='';
+ if(kind==='cannon'){const lb=Number((t.name+' '+t.id).match(/\b(4|6|9|12|18|24|32|42)\b/)?.[0])||([4,6,9,12,18,24,32,42][seed%8]);const r=4+lb*.42,barrel=65+lb*2.1;shape=`<path d="M50 88 L151 88 L163 115 L45 115 Z" fill="#795637" stroke="${stroke}" stroke-width="3"/><circle cx="78" cy="111" r="${10+lb*.30}" fill="#6c482c" stroke="#30291f" stroke-width="4"/><circle cx="78" cy="111" r="6" fill="#ad8855"/><circle cx="143" cy="111" r="${9+lb*.23}" fill="#6c482c" stroke="#30291f" stroke-width="4"/><path d="M61 ${81-r/2} Q77 ${80-r} 99 ${76-r/2} L${barrel+90} ${73-r*.45} L${barrel+90} ${73+r*.6} L100 ${76+r/2}Z" fill="#30373a" stroke="#181e21" stroke-width="3"/><path d="M${barrel+83} ${73-r*.45}v${r*1.04}" stroke="#8d9392" stroke-width="7"/>`}
+ else if(kind==='ship'){const m=2+seed%3;shape=`<path d="M36 110 Q129 144 228 105 L202 128 Q122 153 55 124 Z" fill="#725236" stroke="#493626" stroke-width="3"/><path d="M40 108H221" stroke="#c8a56d" stroke-width="4"/>`;for(let i=0;i<m;i++){const x=81+i*56;shape+=`<path d="M${x} 103V35" stroke="#49392b" stroke-width="4"/><path d="M${x-3} 42 Q${x-51} 67 ${x-7} 99 Z" fill="#f1e8d3" stroke="#9f926f" stroke-width="2"/><path d="M${x+2} 43 Q${x+50} 71 ${x+3} 98 Z" fill="#d3c29e" stroke="#a39475" stroke-width="2"/>`}}
+ else if(kind==='musket'){shape=`<path d="M35 111 L233 45" stroke="#6f4b2b" stroke-width="15" stroke-linecap="round"/><path d="M118 82 L253 37" stroke="#515757" stroke-width="7" stroke-linecap="round"/><path d="M99 89l6 21 11-4" fill="none" stroke="#282725" stroke-width="5"/><path d="M59 98 l-17 24" stroke="#b5945f" stroke-width="7"/>`}
+ else if(kind==='horse'){shape=`<path d="M58 121L64 73 91 65 117 79 147 67 169 88 194 99 194 111 168 111 162 128 147 128 137 109 91 108 81 132 65 132Z" fill="#68513b" stroke="#3e3229" stroke-width="3"/><path d="M79 70L92 44 113 42 121 68" fill="#725638" stroke="#3e3229" stroke-width="3"/><path d="M139 79 L147 49" stroke="#6c4435" stroke-width="5"/><path d="M145 75 Q170 65 179 80" fill="none" stroke="#342721" stroke-width="4"/>`}
+ else if(kind==='wagon'){shape=`<path d="M38 83L215 83 194 109 59 109Z" fill="#865b35" stroke="#4b3426" stroke-width="3"/><path d="M65 83V43H191V83" fill="none" stroke="#674b33" stroke-width="6"/><path d="M66 47L195 50" stroke="#d1b78f" stroke-width="5"/><circle cx="76" cy="119" r="20" fill="#604b34" stroke="#392e25" stroke-width="5"/><circle cx="176" cy="119" r="20" fill="#604b34" stroke="#392e25" stroke-width="5"/>`}
+ else if(kind==='book'){shape=`<path d="M48 48Q89 34 136 56 Q177 34 224 48V120Q177 106 136 126 Q86 106 48 120Z" fill="#e8ddbe" stroke="#715a41" stroke-width="4"/><path d="M136 56V126" stroke="#9e8057" stroke-width="4"/><path d="M65 72Q97 67 123 78 M150 78Q185 67 204 72 M65 90Q97 85 123 95 M150 96Q185 85 204 91" stroke="#a19a82" stroke-width="2.5" fill="none"/>`}
+ else shape=`<path d="M72 119L120 72M160 53L209 99" stroke="#64594d" stroke-width="17" stroke-linecap="round"/><path d="M91 44L119 73 133 59 103 31Z M191 72L213 97 232 78 206 53Z" fill="#6d7776" stroke="#354041" stroke-width="3"/><circle cx="135" cy="99" r="29" fill="#a08955" stroke="#5d4a32" stroke-width="7"/><circle cx="135" cy="99" r="9" fill="#384448"/>`;
+ const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 278 158"><defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e5dac1"/><stop offset="1" stop-color="${hues}"/></linearGradient></defs><rect width="278" height="158" fill="url(#b)"/><path d="M0 15L278 15 M0 143L278 143" stroke="#705836" stroke-opacity=".4" stroke-width="2"/>${shape}<rect x="7" y="7" width="264" height="144" rx="4" fill="none" stroke="#4e3b2c" stroke-width="2"/><rect x="16" y="10" width="68" height="23" rx="3" fill="#24333b"/><text x="50" y="27" text-anchor="middle" fill="#f2e1b7" font-family="Georgia" font-size="13">${String(seed%900+100)}</text></svg>`;
+ const uri='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);V19_IMG_CACHE.set(t.id,uri);return uri}
+function v19WeaponSpec(t){const c=CANNONS.find(z=>z.id===t.id);if(!c)return '';return `<div class="v19-gunstats"><b>Образец ${c.lb} фн</b><span>Урон ${c.atk.toFixed(1)}</span><span>Дальность ${c.range} м</span><span>Масса ${c.weight.toFixed(1)} т</span><span>Перезарядка ×${c.reload.toFixed(2)}</span></div>`}
+function v19TechMods(t){return V19_MODS[t.id]||V19_LEGACY[t.cat]||{research:1.003,trade:1.003}}
+function v19ChooseCategory(cat){v19Category=cat;v19OpenTech()}
+let v19Category='Морская артиллерия',v19Term='';
+function v19OpenTech(){const f=s.player,cats=[...new Set(TECH.map(t=>t.cat))];if(!cats.includes(v19Category))v19Category=cats[0];const term=v19Term.toLowerCase();const pool=TECH.filter(t=>(!term?t.cat===v19Category:(t.name+' '+t.cat).toLowerCase().includes(term))).slice(0,130);let cur=s.research[f];const h=`<section class="v19-techtree"><header><div><h2>Королевская академия</h2><small>Технологии ${s.tech[f].length}/${TECH.length} · образование ${edu(f).toFixed(1)}/100 · ${cur?'идёт исследование':'ожидает распоряжения'}</small></div><button onclick="closeModal()">Закрыть ✕</button></header><div class="v19-techcats">${cats.map(cat=>`<button class="${v19Category===cat?'active':''}" onclick="v19ChooseCategory('${cat.replace(/'/g,'')}')">${esc(cat)}</button>`).join('')}</div><div class="v19-search"><input placeholder="Поиск технологии" value="${esc(v19Term)}" onchange="v19Term=this.value;v19OpenTech()"><span>${pool.length} карточек · все эффекты указаны в %</span></div><div class="v19-techgrid">${pool.map(t=>{const mods=v19TechMods(t),done=has(f,t.id),ongoing=cur?.id===t.id,ok=techAccessible(f,t),can=!done&&!cur&&ok&&s.gold[f]>=t.cost;return `<article class="v19-techcard ${done?'done':''}"><img src="${v19TechPicture(t)}" alt="${esc(t.name)}"><h3>${esc(t.name)}</h3><p>${esc(t.desc||'Отраслевое исследование')}</p><div class="v19-effects">${Object.entries(mods).slice(0,4).map(([k,v])=>v19fmtMod(k,v)).join('')}${v19WeaponSpec(t)}</div><div class="v19-prereq">${t.eduMin?'Образование ≥'+t.eduMin+' · ':''}${t.req?.length?('Требуется: '+t.req.map(id=>TECH.find(x=>x.id===id)?.name||id).join(', ')):'Без предварительных исследований'}</div><footer><small>${researchDays(t,f)} дней · ◈ ${t.cost}</small><button ${can?'':'disabled'} onclick="research('${t.id}');v19OpenTech()">${done?'Изучено':ongoing?'Изучается':'Исследовать'}</button></footer></article>`}).join('')}</div></section>`;showModal(h);const b=$('modalbody');b.classList.add('v19-tech-dialog');}
+// Update earlier tree entry points while keeping their mechanics and quests intact.
+showTechTree=function(cat){if(cat&&TECH.some(t=>t.cat===cat))v19Category=cat;v19OpenTech()};
+const v19BeforeHeader=v15Header;
+v15Header=function(){return v19BeforeHeader().replace('</nav>',`<button class="${v15OverlayTab==='v19workshop'?'on':''}" onclick="v15Switch('v19workshop')">Портреты и 3D</button><button onclick="v19OpenTech()">Полное дерево</button></nav>`) };
+const v19BeforeRender=v15Render;
+v15Render=function(){if(v15OverlayTab==='v19workshop'){const el=document.getElementById('v15-window');if(!el||!s)return;el.innerHTML=v15Header()+`<div class="v15-h-body">${v19Workshop()}</div>`;try{v17InitCanvas();v17DrawModel()}catch(e){}return}v19BeforeRender()};
+function v19Workshop(){const ds=(s.shipDesigns||[]).filter(d=>d.f===s.player),f=s.player,p=NATIONAL[f],ads=(s.advisers[f]||[]).map(id=>ADVISERS.find(a=>a.id===id)).filter(Boolean);return `<section class="v19-wshop"><header><h2>Королевская мастерская</h2><small>Генерация портретов и 3D-кораблей работает локально · сохранённый seed воспроизводит одну и ту же модель</small></header><div class="v19-workcols"><div><h3>Корона и советники</h3><div class="v19-people"><div><img src="${v15Portrait(p.ruler,'Монарх')}" alt="монарх"><b>${esc(p.ruler)}</b></div>${ADVISERS.map(a=>`<div><img src="${v15Portrait(a.name,a.role)}" alt="советник"><b>${esc(a.name)}${ads.includes(a)?' ✓':''}</b></div>`).join('')}</div><div class="v19-advice">Портреты отличаются за счёт имени и роли; генератор формирует SVG-портреты и сохраняет их в автономной игре.</div></div><div><h3>Обзор проектов · 3D</h3>${v17ShipDesigner()}</div></div></section>`}
+function v19Retool(id,key){const v=v8get(),line=v.lines.find(x=>x.id===id&&x.f===s.player),eq=V6_EQUIP[key];if(!line||!eq)return say('Линия недоступна');if(!v6canEquip(s.player,key))return say('Сначала изучите образец');if(line.key===key)return say('Это изделие уже производится');const old=line.key,prev=line.eff;line.key=key;line.eff=Math.max(.12,prev*.45);line.work=0;line.blocked='';log(`Перепрофилирование: ${V6_EQUIP[old]?.name||old} → ${eq.name}. Эффективность ${Math.round(prev*100)}% → ${Math.round(line.eff*100)}%.`);v15Render();drawAll()}
+function v19FactoryReport(){const v=v8get(),f=s.player,rows=v.lines.filter(x=>x.f===f),defs=Object.entries(V6_EQUIP).filter(([id])=>v6canEquip(f,id));return `<section class="v19-prod"><h2>Военное производство · план выпуска</h2><p>Перевод мануфактуры на другое изделие сохраняет 45% накопленной эффективности. Ресурсы списываются при фактическом выпуске.</p><div class="v19-prodgrid">${rows.map(l=>{const recipe=v8recipe(l.key),eff=l.eff*100;return `<article><div class="v19-prodhead"><img src="${(V6_ART[V6_EQUIP[l.key]?.art||l.key]||V6_ART.industry)}"><div><b>${esc(V6_EQUIP[l.key]?.name||l.key)}</b><small>${l.factories} заводов · эффективность ${eff.toFixed(1)}%</small></div></div><div class="v19-meter"><i style="width:${Math.max(1,eff)}%"></i></div><div class="v19-materials">${Object.entries(recipe).filter(x=>x[1]>0).map(([k,q])=>{const have=v8stock(f,k),needed=q*l.factories;return `<div class="${have<needed?'short':''}"><span>${esc(V8_MATERIALS[k]?.name||k)}</span><b>${have.toFixed(1)} / ${needed.toFixed(1)}</b></div>`}).join('')}</div><div class="v19-change"><select id="v19_to_${l.id}">${defs.map(([id,item])=>`<option ${id===l.key?'selected':''} value="${id}">${esc(item.name)}</option>`).join('')}</select><button onclick="v19Retool(${l.id},document.getElementById('v19_to_${l.id}').value)">Перепрофилировать</button></div></article>`}).join('')||'<p>Нет действующих линий.</p>'}</div></section>`}
+const v19BeforeIndustry=v15IndustryPanel;
+v15IndustryPanel=function(){return v19FactoryReport()+v19BeforeIndustry()};
+// Experienced AI officials score demand and strategic threat rather than buying a random unit.
+const v19OldAI=computerTurn;
+computerTurn=function(){v19OldAI();if(!s)return;for(let f=0;f<F.length;f++){if(f===s.player||!regOf(f).length)continue;const land=regOf(f),front=land.filter(z=>N[z.i].adj.some(j=>withWar(f,s.provinces[j].owner))),sea=land.filter(z=>N[z.i].port),g=s.gold[f];
+ if(!s.research[f]&&g>125){const options=TECH.filter(t=>!has(f,t.id)&&techAccessible(f,t)&&t.cost<Math.max(125,s.gold[f]*.55));if(options.length){const wartime=front.length>0,desired=wartime?['Логистика','Пехотные формирования','Пехотное оружие','Артиллерия и осады']:sea.length>1?['Кораблестроение','Флот','Морская артиллерия']:['Хозяйство','Образование'];options.sort((a,b)=>(desired.includes(b.cat)?4:0)-(desired.includes(a.cat)?4:0)+a.cost/1000-b.cost/1000);let t=options[0];s.gold[f]-=t.cost;s.research[f]={id:t.id,remaining:researchDays(t,f),total:researchDays(t,f)}}}
+ const hub=front.sort((a,b)=>armies(b.p)-armies(a.p))[0]||land.find(z=>N[z.i].port)||land[0];if(!hub)continue;
+ if(s.food[f]<24&&g>100){let ag=land.sort((a,b)=>(b.p.farm||0)-(a.p.farm||0))[0];if(ag.p.farm<4){ag.p.farm++;s.gold[f]-=75;}}
+ else if(front.length&&hub.p.depot<2&&g>150){hub.p.depot++;s.gold[f]-=95;}
+ else if(sea.length&&NATIONAL[f]?.quality==='navy'&&g>350&&s.wood[f]>50){let p=sea.sort((a,b)=>b.p.dock-a.p.dock)[0].p;if(!p.dock){p.dock=1;s.gold[f]-=135;s.wood[f]-=40;}}
+ }};
+// Expanded structural detail of procedurally generated vessels; seed is saved with design.
+const v19BeforeMesh=v8shipMesh;
+v8shipMesh=function(type='frigate',design=null){const m=v19BeforeMesh(type,design);if(!design)return m;const seed=(Number(design.modelSeed)||v19hash(design.name||type))>>>0,k=seed%5,size=type==='line'?1.55:type==='frigate'?1.1:type==='transport'?1.16:.82,L=11*size,W=(type==='line'?3.4:2.8)*size;const gold=['#a58a57','#bd9c64','#bdab7b','#928768','#bf904e'][k];for(const sign of [-1,1]){
+ for(let a=0;a<5+k;a++){const x=-L*.37+(a+.5)*(L*.74)/(5+k);v8cube(m,x,sign*W*.465,-.08*size,.20*size,.065*size,.18*size,'#161d20');v8seg(m,[x,sign*W*.49,.06],[x,sign*W*.49,-.20*size],gold,.7)}
+ v8seg(m,[-L*.42,sign*W*.46,.24*size],[L*.42,sign*W*.46,.24*size],gold,.9);
+ for(let i=0;i<3;i++){let x=L*(i-1)*.25;v8seg(m,[x,sign*W*.27,2.5*size],[x+((seed>>(i*2))&3)*.045*size,sign*W*.47,.25*size],'#bcb49c',.7)}
+ }
+ for(let i=0;i<3;i++){const x=L*(i-1)*.26;v8cube(m,x,0,1.65*size,.19*size,.18*size,.20*size,'#a58a67');v8seg(m,[x,0,1.70*size],[x,0,2.65*size],'#514639',1.0)}
+ return m};
+const v19OldCannon=v8cannon3d;
+v8cannon3d=function(m,x,y,z,lb=12,side=1,scale=1){v19OldCannon(m,x,y,z,lb,side,scale);const len=(.38+.17*lb/12)*scale,sz=(.28+lb/70)*scale,r=(.065+lb/400)*scale;v8cube(m,x,y,z-.18*scale,sz*.85,.39*scale,.06*scale,'#6c4b31');v8cylinder(m,[x,y+side*len*.85,z+.05*scale],[x,y+side*len*.93,z+.05*scale],r*1.13,'#77706a',10);v8cube(m,x-sz*.28,y,z-.04*scale,.05*scale,.51*scale,.09*scale,'#634b35');v8cube(m,x+sz*.28,y,z-.04*scale,.05*scale,.51*scale,.09*scale,'#634b35')};
+// New map details appear only at close zoom, avoiding the previous giant-label problem.
+function v19GeoDecor(){const world=document.getElementById('world');if(!world||!s)return;let g=document.getElementById('v19-geo');if(!g){g=document.createElementNS('http://www.w3.org/2000/svg','g');g.id='v19-geo';g.setAttribute('pointer-events','none');world.appendChild(g)}const towns=N.filter((n,i)=>i%49===0).slice(0,95);const rivers=N.filter((n,i)=>n.terrain==='plain'&&i%113===0).slice(0,50);g.innerHTML=`<g opacity=".62">${rivers.map(n=>`<path d="M${n.x-7},${n.y-10} Q${n.x+3},${n.y} ${n.x+9},${n.y+12}" stroke="#4796b2" stroke-width="1.1" fill="none"/>`).join('')}</g><g>${towns.map(n=>`<circle cx="${n.x}" cy="${n.y}" r="1.6" fill="#e5d9b9" stroke="#5d4f37" stroke-width=".8"/><path d="M${n.x-2},${n.y+2}v-4l2-1.7 2 1.7v4Z" fill="#b79b6a"/>`).join('')}</g>`;g.style.opacity=zoom>4?'.95':zoom>2?'.42':'0'};
+const v19OldDrawMap=drawMap;drawMap=function(){v19OldDrawMap();v19GeoDecor()};
+const v19OldTransform=updateTransform;updateTransform=function(){v19OldTransform();let el=document.getElementById('v19-geo');if(el)el.style.opacity=zoom>4?'.95':zoom>2?'.42':'0'};
+// Don't overwrite previous saves; version XIX has its own key.
+const v19OldSave=save;save=function(){try{localStorage.setItem(V19_SAVE,JSON.stringify(s));say('Кампания XIX сохранена')}catch(e){v19OldSave()}};
+const v19OldLoad=load;load=function(){try{const txt=localStorage.getItem(V19_SAVE);if(!txt)return v19OldLoad();restoreSave(JSON.parse(txt));drawAll();say('Кампания XIX загружена')}catch(e){say('Не удалось открыть XIX: '+e.message)}};
+const v19OldSaveQuiet=saveQuiet;saveQuiet=function(){try{if(s)localStorage.setItem(V19_SAVE,JSON.stringify(s))}catch(e){}};
+const v19Style=document.createElement('style');v19Style.id='v19-css';v19Style.textContent=`
+:root{--gold:#d8b77b;--cream:#f1dcad;--ink:#ede7d7}
+body{font-family:'Palatino Linotype',Georgia,serif!important}.brand h1,.panel h2,.v15-h-header h2{font-family:Georgia,serif!important;letter-spacing:.65px}.resourcebar{background:linear-gradient(180deg,#101e29,#09161e)!important}.resource{border-color:#6d5537!important;background:linear-gradient(180deg,#1b3441,#11222d)!important}.mapframe{border-color:#92754d!important}.maptools{background:linear-gradient(180deg,#213847,#0e2230)!important}
+.v19-techtree{width:100%;color:#e8e0cd}.v19-techtree header{display:flex;justify-content:space-between;align-items:center;gap:20px;padding-bottom:12px;border-bottom:1px solid #725b3b}.v19-techtree h2{margin:0;font:700 31px Georgia,serif;color:#f0d8a4}.v19-techtree header small{color:#b9c9cf}.v19-tech-dialog{width:min(1640px,96vw)!important;max-width:none!important;max-height:92vh!important;overflow:auto!important;background:#10202b!important;border:1px solid #a48451!important}.v19-techcats{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.v19-techcats button{font-size:12px;border:1px solid #536a74}.v19-techcats button.active{background:linear-gradient(#b38e56,#634d30);border-color:#c9aa79}.v19-search{display:flex;gap:14px;align-items:center;margin:9px 0}.v19-search input{min-width:300px;flex:1;background:#172d3a;color:#e8dac0;border:1px solid #775e3a;padding:11px}.v19-search span{color:#a9bec4}.v19-techgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}.v19-techcard{padding:9px;background:linear-gradient(180deg,#1d3441,#0d1922);border:1px solid #645538;border-radius:8px;display:flex;flex-direction:column;gap:6px}.v19-techcard.done{border-color:#5a987e}.v19-techcard>img{width:100%;height:124px;object-fit:cover;border:1px solid #b09562;border-radius:5px}.v19-techcard h3{margin:2px 0;font:700 18px Georgia,serif;color:#f5dda7}.v19-techcard p{color:#aebdc0;font-size:11px;min-height:40px;margin:0;line-height:1.35}.v19-gunstats{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;padding:5px;background:#0b1a23;border:1px solid #53626a;border-radius:4px}.v19-gunstats b{color:#f2ce8c;font-size:11px;width:100%}.v19-gunstats span{font-size:10px;color:#bfd2d6;margin-right:4px}.v19-effects{padding:5px 0;border-top:1px solid #3f4f55;border-bottom:1px solid #3f4f55}.v19-effect{display:flex;justify-content:space-between;gap:8px;font-size:11px;line-height:1.75}.v19-effect span{color:#b7c6c9}.v19-effect strong.plus{color:#95c89f}.v19-effect strong.minus{color:#f0c788}.v19-prereq{font-size:10px;color:#c7b592;flex:1}.v19-techcard footer{display:flex;justify-content:space-between;align-items:center;gap:7px}.v19-techcard footer small{color:#d8c091}.v19-techcard button{padding:6px 8px;font-size:12px}
+.v19-prod{padding:12px;border:1px solid #705b38;background:linear-gradient(180deg,#1b303b,#0d1820);border-radius:9px;margin-bottom:14px}.v19-prod h2{color:#f0d9a5;font:700 23px Georgia,serif;margin:4px 0}.v19-prod>p{color:#bbc7c9;font-size:12px}.v19-prodgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.v19-prodgrid article{padding:10px;border:1px solid #4f5a56;background:#112431;border-radius:8px}.v19-prodhead{display:flex;gap:9px;align-items:center}.v19-prodhead img{height:70px;width:96px;object-fit:cover;border:1px solid #a58a5a;border-radius:4px}.v19-prodhead small{display:block;color:#becacc}.v19-meter{height:7px;background:#0d181f;border-radius:5px;overflow:hidden;margin:9px 0}.v19-meter i{display:block;height:100%;background:linear-gradient(90deg,#6597ac,#cbb46e)}.v19-materials{display:grid;gap:2px}.v19-materials>div{display:flex;justify-content:space-between;color:#b8c9ce;font-size:11px}.v19-materials>div.short{color:#e6a197}.v19-change{display:flex;gap:6px;margin-top:9px}.v19-change select{min-width:0;flex:1;background:#172d3a;color:#f0ddba;border:1px solid #586a72}.v19-workcols{display:grid;grid-template-columns:1fr 2fr;gap:14px}.v19-wshop>header{margin:0 0 12px;border-bottom:1px solid #78613d}.v19-wshop h2{color:#f0d8a4}.v19-people{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.v19-people>div{display:grid;gap:4px;border:1px solid #78613d;padding:5px;border-radius:6px;background:#14232d}.v19-people img{width:100%;height:176px;object-fit:cover}.v19-people b{font:700 13px Georgia,serif;color:#f0d8a4}.v19-advice{font-size:12px;color:#b7c9cb;padding:10px}
+@media(max-width:1380px){.v19-techgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.v19-workcols{grid-template-columns:1fr}.v19-prodgrid{grid-template-columns:1fr}}@media(max-width:650px){.v19-techgrid,.v19-people{grid-template-columns:1fr}.v19-search{flex-direction:column}.v19-search input{min-width:0;width:100%}}
+`;document.head.appendChild(v19Style);
+// Preserve existing startup/render contracts.
+const v19OldAll=drawAll;drawAll=function(){v19OldAll();const edition=document.querySelector('.brand .edition');if(edition)edition.textContent='XXI'};
+
+/* XIX equipment extensions — manufactured goods, real regiment-issued quantities. */
+const V19_FIELD_GEAR={
+ v19_ramrod:{name:'Цилиндрический шомпол',tech:'v19_cartridge_boxes',work:.26,gold:.36,recipe:{iron:.028,wood:.006,coal:.002},bonus:{attack:1.06,defence:1.01},slot:'fire',quantity:120},
+ v19_field_drum:{name:'Полковой барабан',tech:'v19_regiment_musicians',work:1.8,gold:2.5,recipe:{wood:1.2,leather:.4,copper:.16},bonus:{morale:1.08,defence:1.02},slot:'morale',quantity:4},
+ v19_pioneers:{name:'Инженерный набор сапёра',tech:'v19_bridge_pontoons',work:1.3,gold:1.8,recipe:{iron:.5,wood:1.1,leather:.2},bonus:{attack:1.04,supply:1.07},slot:'engineering',quantity:8},
+ v19_ammo_pouch:{name:'Патронная сумка',tech:'v19_cartridge_boxes',work:.18,gold:.25,recipe:{leather:.19,flax:.12},bonus:{attack:1.035,morale:1.02},slot:'ammunition',quantity:120}
+};
+for(const [key,item] of Object.entries(V19_FIELD_GEAR)){
+ V6_EQUIP[key]={name:item.name,tech:item.tech,art:'musket',work:item.work,gold:item.gold,iron:item.recipe.iron||0,wood:item.recipe.wood||0};
+ V8_EQUIP_RECIPES[key]=item.recipe;
+}
+function v19GearFactor(reg,kind){let val=1;for(const row of Object.values(reg.v19Gear||{})){const it=V19_FIELD_GEAR[row.key];if(!it)continue;const ratio=Math.max(0,Math.min(1,row.count/it.quantity));val*=1+((it.bonus[kind]||1)-1)*ratio;}return val}
+function v19EquipSupport(regId,key){const r=v15Regiments(selected).find(x=>x.id===regId),item=V19_FIELD_GEAR[key];if(!r||!item||!own(selected))return;if(!has(s.player,item.tech))return say('Исследуйте '+(TECH.find(t=>t.id===item.tech)?.name||item.tech));const inv=s.equipment[s.player];r.v19Gear ||= {};const before=r.v19Gear[item.slot];if(before){inv[before.key]=(inv[before.key]||0)+before.count;delete r.v19Gear[item.slot]};if(before?.key===key){v15Render();drawAll();return}
+ const available=Math.floor(inv[key]||0),n=Math.min(item.quantity,available);if(n<1){if(before){inv[before.key]-=before.count;r.v19Gear[item.slot]=before}return say('Пустой склад: '+item.name)}inv[key]-=n;r.v19Gear[item.slot]={key,count:n};log(r.name+': выдан '+item.name+' ('+n+' из '+item.quantity+').');v15Render();drawAll()}
+function v19FieldPanel(){const r=v15SelectedReg();if(!r)return '';let inv=s.equipment[s.player];return `<section class="v19-field"><h3>Полевое снаряжение полка</h3><p>Сначала исследуйте предмет, затем изготовьте его на мануфактуре. Неполная выдача уменьшает бонус пропорционально фактическому количеству.</p><div class="v19-field-grid">${Object.entries(V19_FIELD_GEAR).map(([key,it])=>{let have=r.v19Gear?.[it.slot],active=have?.key===key;return `<article><img src="${v19TechPicture({id:key,name:it.name})}" alt=""><b>${esc(it.name)}</b><small>Склад ${Math.floor(inv[key]||0)} · Штат ${it.quantity} ${active?'· Выдано '+have.count:''}</small>${Object.entries(it.bonus).map(([k,v])=>`<div class="v19-effect"><span>${{attack:'Атака',defence:'Оборона',morale:'Мораль',supply:'Снабжение'}[k]}</span><strong class="plus">+${Math.round((v-1)*100)}%</strong></div>`).join('')}<button ${!has(s.player,it.tech)?'disabled':''} onclick="v19EquipSupport(${r.id},'${key}')">${active?'Снять':'Выдать со склада'}</button></article>`}).join('')}</div><div class="v19-field-total">Эффективные бонусы: атака +${((v19GearFactor(r,'attack')-1)*100).toFixed(1)}% · оборона +${((v19GearFactor(r,'defence')-1)*100).toFixed(1)}% · мораль +${((v19GearFactor(r,'morale')-1)*100).toFixed(1)}%</div></section>`}
+const v19RegPanelPrior=v15RegPanel;
+v15RegPanel=function(){return v19RegPanelPrior()+v19FieldPanel()};
+const v19PowerPrior=power;
+power=function(p,f,attack=false,where=0){let val=v19PowerPrior(p,f,attack,where);const list=p?.v15Regiments||[];if(!list.length)return val;const avg=list.reduce((a,r)=>a+v19GearFactor(r,attack?'attack':'defence')*(1+(v19GearFactor(r,'morale')-1)*.25),0)/list.length;return val*avg};
+const v19FieldStyle=document.createElement('style');v19FieldStyle.textContent=`.v19-field{padding:13px;border:1px solid #745e38;background:linear-gradient(180deg,#172e3a,#0c1a23);border-radius:8px;margin-top:14px}.v19-field h3{font:700 22px Georgia,serif;color:#f0d5a0}.v19-field p{color:#b7c8cc;font-size:12px}.v19-field-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}.v19-field article{display:flex;flex-direction:column;gap:5px;border:1px solid #5b523c;border-radius:6px;padding:6px;background:#132432}.v19-field article img{width:100%;height:85px;object-fit:cover}.v19-field article b{font:700 15px Georgia,serif;color:#f2d8a6}.v19-field article small{color:#c0cdd0}.v19-field article button{margin-top:auto}.v19-field-total{padding:9px;margin-top:8px;color:#9ec99c;border-top:1px solid #5b523c}@media(max-width:1280px){.v19-field-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}`;document.head.appendChild(v19FieldStyle);
+
+/* XX · Squadron organization, signal modules, real operational contacts and fleet tactics. */
+const V20_SAVE_KEY='empire_of_sails_v20_save';
+const V20_MODULES={
+ trumpet:{name:'Сигнальные рупоры',slot:'signals',tech:'v20_trumpet',recipe:{copper:.20,wood:.10,leather:.10},gold:3.5,work:1.3,mods:{commandDelay:.82,formationHold:1.06},desc:'Задержка приказов −18% · удержание линии +6%'},
+ signalFlags:{name:'Межкорабельный комплект флагов',slot:'signals',tech:'v20_flags',recipe:{flax:.70,hemp:.24,wood:.14},gold:3.8,work:1.4,mods:{commandDelay:.88,formationHold:1.11,spotting:1.04},desc:'Задержка −12% · строй +11% · обнаружение +4%'},
+ lightCarriage:{name:'Облегчённые пушечные лафеты',slot:'carriage',tech:'v20_carriage',recipe:{iron:1.6,wood:2.3,steel:.35},gold:9.5,work:3.1,mods:{carriageWeight:.88,gunReload:.96,recoilStress:1.08},desc:'Масса батарей −12% · перезарядка быстрее на 4% · износ креплений +8%'},
+ recoilCarriage:{name:'Усиленные противооткатные лафеты',slot:'carriage',tech:'v20_recoil',recipe:{iron:2.3,wood:2.6,leather:.27},gold:11,work:3.3,mods:{gunAccuracy:1.07,carriageWeight:1.04,recoilStress:.83},desc:'Точность +7% · масса батарей +4% · износ −17%'},
+ spyglass:{name:'Адмиральские подзорные трубы',slot:'navigation',tech:'v20_optics',recipe:{copper:.35,iron:.08,leather:.10},gold:7,work:2.0,mods:{spotting:1.18,gunAccuracy:1.03},desc:'Обнаружение +18% · точность +3%'},
+ helmTackles:{name:'Усовершенствованные штуртросы',slot:'navigation',tech:'v20_helm',recipe:{hemp:.70,wood:.60,iron:.13},gold:5.5,work:1.9,mods:{turnRate:1.13,repairRate:.97},desc:'Скорость поворота +13% · скорость ремонта −3%'},
+ magazine:{name:'Защищённые крюйт-камеры',slot:'safety',tech:'v20_magazine',recipe:{wood:1.5,iron:.30,leather:.22},gold:8,work:2.5,mods:{ammoCapacity:1.17,fireRisk:.76},desc:'Запас боеприпасов +17% · риск пожара −24%'},
+ sickbay:{name:'Корабельный лазарет',slot:'safety',tech:'v20_surgeon',recipe:{flax:.35,wood:.80,copper:.13},gold:6,work:2.1,mods:{crewRecovery:1.17,supplyUse:1.045},desc:'Восстановление команды +17% · провиант +4,5%'}
+};
+const V20_SLOT_NAMES={signals:'Передача приказов',carriage:'Орудийные лафеты',navigation:'Управление и наблюдение',safety:'Защита экипажа'};
+const V20_TECHS=[
+ ['v20_trumpet','Морская артиллерия','Рупорная передача приказов',['signals'],23,152,{crewTraining:1.025}],
+ ['v20_flags','Флот','Сигнальные книжки и вымпелы',['signals','navigation'],31,178,{spotting:1.025}],
+ ['v20_carriage','Кораблестроение','Облегчённые корабельные лафеты',['guncarriages'],30,174,{repairRate:1.025}],
+ ['v20_recoil','Морская артиллерия','Противооткатные платформы',['guncarriages'],36,186,{gunAccuracy:1.015}],
+ ['v20_optics','Флот','Наблюдательная оптика флота',['navigation'],29,163,{spotting:1.025}],
+ ['v20_helm','Кораблестроение','Штуртросы и рулевые блоки',['rigging'],26,148,{turnRate:1.025}],
+ ['v20_magazine','Морская артиллерия','Безопасные артиллерийские погреба',['gunfoundries'],35,188,{fireRisk:.975}],
+ ['v20_surgeon','Флот','Корабельная медицинская служба',['navalcollege'],37,177,{crewRecovery:1.03}],
+ ['v20_line','Флот','Школа удержания боевой линии',['linebattle','signals'],39,202,{formationHold:1.16,commandDelay:.94}],
+ ['v20_formation','Флот','Эскадренные манёвры по сигналу',['v20_line'],43,213,{formationHold:1.12,turnRate:1.07}],
+ ['v20_shores','Логистика','Гидрографическая съёмка берегов',['navigation'],27,155,{landingPrep:1.14,landingCasualty:.92}],
+ ['v20_marine','Флот','Школа корабельной пехоты',['v20_shores'],38,210,{boardingPower:1.17,landingPrep:1.08}],
+ ['v20_depots','Логистика','Прибрежные провиантские станции',['logistics'],31,173,{seaSupply:1.13,convoyLoss:.94}],
+ ['v20_training','Образование','Экзамены навигационных офицеров',['academies','navigation'],35,187,{crewTraining:1.12,commandDelay:.95}],
+ ['v20_pumps','Кораблестроение','Корабельные помпы нового образца',['shipyards'],32,185,{damageControl:1.17,shipCost:1.025}],
+ ['v20_pay','Управление','Унификация морского жалования',['banking'],29,165,{crewMorale:1.09,upkeep:1.06}],
+ ['v20_couriers','Управление','Военные курьерские станции',['roads'],26,142,{armyCommandDelay:.90,armySupply:1.05}],
+ ['v20_fieldmusic','Пехотные формирования','Полковые барабаны и рожки',['drill'],25,148,{regimentMorale:1.08,regimentSupply:1.025}],
+ ['v20_sappers','Логистика','Инженерные понтонные парки',['roads','sappers'],34,196,{riverCrossing:1.16,roadCost:1.04}],
+ ['v20_fiscal','Хозяйство','Контроль качества морских поставок',['banking','shipyards'],37,198,{navalProcurement:1.08,corruptionLoss:.95}]
+];
+for(const [id,cat,name,req,eduMin,cost,mods] of V20_TECHS){if(!TECH.some(t=>t.id===id))TECH.push({id,cat,name,req:req.filter(x=>TECH.some(t=>t.id===x)),eduMin,cost,time:5,desc:Object.entries(mods).map(([k,v])=>`${k} ${v<1?'−':'+'}${Math.round(Math.abs(v-1)*100)}%`).join(' · ')});}
+const V20_BONUS_LABELS={commandDelay:'Задержка приказа',formationHold:'Удержание линии',carriageWeight:'Масса артиллерии',recoilStress:'Износ лафета',gunAccuracy:'Точность залпа',gunReload:'Время перезарядки',spotting:'Дальность обнаружения',turnRate:'Скорость поворота',repairRate:'Скорость ремонта',ammoCapacity:'Ёмкость погребов',fireRisk:'Риск пожара',crewRecovery:'Восстановление команды',supplyUse:'Расход провианта',landingPrep:'Подготовка десанта',landingCasualty:'Потери при высадке',boardingPower:'Абордажная сила',seaSupply:'Обеспеченность эскадры',convoyLoss:'Потери конвоев',crewTraining:'Рост навыков экипажа',damageControl:'Борьба за живучесть',crewMorale:'Мораль экипажа',upkeep:'Содержание',armyCommandDelay:'Задержка армейских приказов',armySupply:'Снабжение армии',regimentMorale:'Мораль полков',regimentSupply:'Потребление полков',riverCrossing:'Форсирование рек',roadCost:'Стоимость мостов и дорог',navalProcurement:'Качество закупки',corruptionLoss:'Потери от коррупции'};
+Object.assign(BONUS_NAMES,V20_BONUS_LABELS);
+for(const t of TECH.filter(t=>t.id.startsWith('v20_'))){const m=Object.values(V20_MODULES).find(x=>x.tech===t.id);const eff=V20_TECHS.find(x=>x[0]===t.id)?.[6]||{};t.desc=(m?'Открывает модуль «'+m.name+'». ':'')+Object.entries(eff).map(([k,v])=>`${V20_BONUS_LABELS[k]||BONUS_NAMES[k]||k} ${v<1?'−':'+'}${(Math.abs(v-1)*100).toFixed(Math.abs(v-1)<.05?1:0)}%`).join(' · ');}
+
+for(const [id,o] of Object.entries(V20_MODULES)){
+ if(!V6_EQUIP[id])V6_EQUIP[id]={name:o.name,tech:o.tech,work:o.work,art:'industry',gold:o.gold,...o.recipe};
+ if(typeof V8_EQUIP_RECIPES!=='undefined')V8_EQUIP_RECIPES[id]=o.recipe;
+}
+const v20BaseMod=globalMod;
+globalMod=function(f,key){let m=v20BaseMod(f,key);for(const [id,cat,name,req,edu,cost,mods] of V20_TECHS)if(has(f,id)&&mods[key]!==undefined)m*=mods[key];return m};
+const V20_STATE=()=>{if(!s)return null; s.v20 ||= {contact:null,seen:{},captainXP:{},fleetReports:[],lastModelSeed:1,taskQueue:[]};return s.v20};
+const V20_FORMATIONS={line:{name:'Линия баталии',cohesion:1.12,turn:.91,spacing:11},column:{name:'Кильватерная колонна',cohesion:1.04,turn:1.02,spacing:9},loose:{name:'Свободное построение',cohesion:.80,turn:1.23,spacing:16}};
+function v20SetDesignModule(id,slot,key){const d=s.shipDesigns.find(x=>x.id===id&&x.f===s.player);if(!d)return;let v=key&&V20_MODULES[key];if(v&&(v.slot!==slot||!has(s.player,v.tech)))return say('Сначала исследуйте эту модификацию');d.modules ||= {};if(!key)delete d.modules[slot];else d.modules[slot]=key;drawAll(); if(document.getElementById('v15-window')?.offsetParent!==null)v15Render()}
+function v20ModsFor(d){const mods={};for(const key of Object.values(d?.modules||{})){const obj=V20_MODULES[key];if(obj)for(const [k,v] of Object.entries(obj.mods))mods[k]=(mods[k]||1)*v;}return mods;}
+function v20ShipMod(sh,k){return (v20ModsFor(sh?.design)[k]||1)*globalMod(sh?.f??s.player,k)}
+function v20ModuleCard(d){if(!d)return '';const f=s.player,mods=v20ModsFor(d);return `<section class="v20-panel"><h3>Конструктор: сигнальная служба и оснащение</h3><p>Модули сначала исследуются и изготавливаются на мануфактурах. При постройке один комплект каждого модуля списывается со склада.</p><div class="v20-modulegrid">${Object.entries(V20_SLOT_NAMES).map(([slot,label])=>`<label class="v20-module"><b>${label}</b><select onchange="v20SetDesignModule(${d.id},'${slot}',this.value)"><option value="">Без модуля</option>${Object.entries(V20_MODULES).filter(([k,v])=>v.slot===slot).map(([k,v])=>`<option value="${k}" ${d.modules?.[slot]===k?'selected':''} ${has(f,v.tech)?'':'disabled'}>${esc(v.name)} ${has(f,v.tech)?'':'· изучить'}</option>`).join('')}</select><small>${d.modules?.[slot]?V20_MODULES[d.modules[slot]].desc:'Выберите исследованный модуль'}</small></label>`).join('')}</div><div class="v20-summary">${Object.entries(mods).map(([k,v])=>`<span>${V20_BONUS_LABELS[k]||k}: <b class="${v<1?'v20-minus':'v20-plus'}">${v<1?'−':'+'}${(Math.abs(v-1)*100).toFixed(0)}%</b></span>`).join('')||'На проекте нет дополнительных модулей.'}</div><button onclick="v15Switch('industry')">Производство модулей ↗</button></section>`}
+const v20OldDesigner=v17ShipDesigner;
+v17ShipDesigner=function(){const d=v17Blueprint(),base=v20OldDesigner();return d?base.replace('</div></div></section>',v20ModuleCard(d)+'</div></div></section>'):base;};
+const v20BaseStats=v6designStats;
+v6designStats=function(d){const st=v20BaseStats(d),mods=v20ModsFor(d),h=V6_HULLS[d.type]; if(!h)return st;
+ if(mods.carriageWeight){const before=st.weight;st.weight=before*mods.carriageWeight;st.speed=Math.max(3,st.speed*(1+Math.min(.16,(before-st.weight)/Math.max(1,h.tonnage)*.8)));if(st.weight>h.tonnage*.18&&!st.errors.some(e=>e.includes('перегружают'))) {st.valid=false;st.errors.push('Перегрузка корпуса орудиями')}}
+ st.reloadSec=Math.round(17*globalMod(d.f,'gunReload')*(mods.gunReload||1));st.commandMultiplier=globalMod(d.f,'commandDelay')*(mods.commandDelay||1);st.formationMultiplier=globalMod(d.f,'formationHold')*(mods.formationHold||1);st.turnMultiplier=globalMod(d.f,'turnRate')*(mods.turnRate||1);st.moduleCount=Object.keys(d.modules||{}).length;st.days=Math.ceil(st.days*(1+.012*st.moduleCount)); st.gold=Math.ceil(st.gold*(1+.018*st.moduleCount));return st};
+const v20BuildBase=v6buildShip;
+v6buildShip=function(id){let d=v6design(id);if(!d)return;const stock=s.equipment[s.player],req=Object.values(d.modules||{});for(const k of req){const m=V20_MODULES[k];if(!m||!has(s.player,m.tech))return say('Не исследован корабельный модуль: '+(m?.name||k));if((stock[k]||0)<1)return say('На складе нет модуля «'+m.name+'». Назначьте на производство его комплект.');}
+ const before=s.production.length;v20BuildBase(id);if(s.production.length>before){for(const k of req)stock[k]--;const q=s.production[s.production.length-1];if(q.key==='customship')q.design.modules={...d.modules};} };
+function v20ShipOrganization(fleet){if(!fleet)return {value:0,delay:99,hold:0,formation:'line'};const ships=v8shipsOf(fleet);if(!ships.length)return {value:0,delay:99,hold:0,formation:fleet.formation||'line'};const n=ships.length,formation=fleet.formation||'line',fm=V20_FORMATIONS[formation]||V20_FORMATIONS.line;
+ const crewAvg=ships.reduce((a,x)=>a+Math.min(1,x.crew/Math.max(1,x.crewMax)),0)/n;
+ const trainAvg=ships.reduce((a,x)=>a+((x.crewSkills?.sailing||x.crewSkills?.gunnery||x.experience||20)),0)/n;
+ const sizePenalty=Math.min(.35,Math.max(0,n-4)*.023),morale=Math.min(100,fleet.seaMorale??83)/100;
+ const cohesion=ships.reduce((sum,sh)=>sum*v20ShipMod(sh,'formationHold'),1)**(1/n);
+ const commands=ships.reduce((sum,sh)=>sum*v20ShipMod(sh,'commandDelay'),1)**(1/n);
+ const adm=fleet.admiral!=null?1.08:1;
+ const hold=Math.max(.3,Math.min(1.7,(.35+trainAvg*.005+crewAvg*.27)*fm.cohesion*cohesion*adm*(1-sizePenalty)*(.65+morale*.35)));
+ const value=Math.max(1,Math.min(100,Math.round(hold*79)));
+ const delay=+Math.max(1.0,Math.min(15,5.9/hold*commands)).toFixed(1);
+ return {value,delay,hold,formation,ships:n,train:Math.round(trainAvg)};
+}
+function v20FleetFormat(id,form){let fl=s.fleets.find(x=>x.id===id&&x.f===s.player);if(!fl||!V20_FORMATIONS[form])return;fl.formation=form;log(`Эскадра «${fl.name}» перешла на построение «${V20_FORMATIONS[form].name}».`);drawAll();v8Refresh(false)}
+function v20FleetPanel(){const fleets=s.fleets.filter(x=>x.f===s.player);return `<section class="v20-panel"><h3>Боевой порядок и управление эскадрами</h3><p>Скорость сохраняется отдельно для каждого корабля. Организация влияет на задержку приказов и устойчивость к нарушению линии.</p>${fleets.map(fl=>{const o=v20ShipOrganization(fl);return `<div class="v20-squadrow"><div><b>${esc(fl.name)}</b><small>${o.ships} кораблей · обучение ${o.train}% · организация ${o.value}/100</small><div class="v20-bar"><i style="width:${o.value}%"></i></div></div><div><span>Задержка приказа <strong>${o.delay} с</strong></span><select onchange="v20FleetFormat(${fl.id},this.value)">${Object.entries(V20_FORMATIONS).map(([k,v])=>`<option value="${k}" ${o.formation===k?'selected':''}>${v.name}</option>`).join('')}</select></div><button onclick="v20TacticalDrill(${fl.id})">Тактическая 3D-сцена</button></div>`}).join('')||'<p>Сначала сформируйте эскадру и назначьте в неё корабли.</p>'}</section>`}
+const v20OldFleetPanel=v15ShipPanel;
+v15ShipPanel=function(){return v20FleetPanel()+v20OldFleetPanel()};
+const v20OldFleetUI=v8fleetUI;
+v8fleetUI=function(){return v20FleetPanel()+v20OldFleetUI()};
+// Separate, deterministic vessel speed; organization never raises maximum speed of a slower hull.
+function v20VesselSpeed(sh){const st=v6designStats({...sh.design,f:sh.f});const sail=sh.crewSkills?.sailing??sh.experience??20;return Math.max(2,(st.speed||8.5)*(sh.hp/Math.max(1,sh.maxHp))**.32*(.72+.28*sh.crew/Math.max(1,sh.crewMax))*(.86+sail*.0014));}
+const v20OldFleetSpeed=v8fleetSpeed;
+v8fleetSpeed=function(fl){const ships=v8shipsOf(fl);return ships.length?Math.min(...ships.map(v20VesselSpeed)):0};
+// Better-looking 3D hulls and signal equipment, reproducible from saved modelSeed.
+const v20OldMesh=v8shipMesh;
+v8shipMesh=function(type='frigate',design=null){const m=v20OldMesh(type,design),size=type==='line'?1.55:type==='frigate'?1.1:type==='transport'?1.16:.82,L=11*size,W=(type==='line'?3.4:2.8)*size,seed=(design?.modelSeed||169)%997;
+ for(let side of [-1,1]){const y=side*W*.32;for(let j=0;j<18;j++){let x=(-.42+j*.05)*L;v8seg(m,[x,y,.22*size],[x,y,.51*size],'#b99b66',.65);if(j>0)v8seg(m,[(x-L*.05),y,.48*size],[x,y,.48*size],'#c6a579',.7);}for(let j=0;j<9;j++){let x=(-.36+j*.084)*L;v8seg(m,[x,y,.43*size],[x-L*.04,0,.51*size],'#9d855f',.4)}}
+ for(let j=0;j<5;j++){const x=(-.31+j*.15)*L;v8cube(m,x,0,.30*size,L*.055,W*.16,.11*size,'#7e6044');v8cube(m,x,0,.38*size,L*.025,W*.05,.10*size,'#ad8a5b')}
+ const stern=-(.46*L),paint=['#b38b48','#b7a16b','#9d6d3b'][seed%3];for(let j=-2;j<=2;j++){v8seg(m,[stern,j*W*.09,.38*size],[stern,j*W*.09,1.15*size],paint,.9);v8cube(m,stern-.08,j*W*.09,.93*size,.13*size,W*.054,.27*size,'#425761')}
+ v8cube(m,stern-.1,0,1.22*size,L*.06,W*.56,.15*size,paint);
+ if(design?.modules?.signals==='trumpet'){for(let x of [-1,1])v8cylinder(m,[L*.29,x*W*.11,.50*size],[L*.38,x*W*.13,.83*size],.05*size,'#bc9a59',8)}
+ if(design?.modules?.signals==='signalFlags'){v8seg(m,[-L*.21,0,5.0*size],[-L*.21,0,7.3*size],'#a98d5f',.65);v8sail(m,-L*.21,6.5*size,.72*size,.54*size,'#c54334')}
+ if(design?.modules?.navigation==='spyglass')v8cylinder(m,[L*.24,0,.58*size],[L*.37,0,.62*size],.034*size,'#d1b36e',9);
+ if(design?.modules?.safety==='sickbay')v8cube(m,L*.28,0,.54*size,L*.13,W*.20,.25*size,'#dcd7c6');
+ return m};
+const v20OldMeshFor=v8meshFor;
+v8meshFor=function(entity){if(entity.kind==='ship'&&entity.design){const mod=JSON.stringify(entity.design.modules||{}),key=`v20:${entity.type}:${entity.design.modelSeed||0}:${entity.design.batteries.map(x=>x.gun+x.count).join(':')}:${mod}`;if(!V8_MESH_CACHE[key])V8_MESH_CACHE[key]=v8shipMesh(entity.type,entity.design);return V8_MESH_CACHE[key]}return v20OldMeshFor(entity)};
+// Accurate carriage profile: the gun tube axis and trunnions align, wheels remain on both sides.
+const v20OldGun=v8cannon3d;
+v8cannon3d=function(m,x,y,z,lb=12,side=1,scale=1){const s0=scale,span=(.34+.019*lb)*scale,r=(.065+.0021*lb)*scale;v8cube(m,x,y,z-.17*s0,.53*s0,.32*s0,.16*s0,'#855633');for(const k of [-1,1]){const wy=y+k*.20*s0;v8cylinder(m,[x-.16*s0,wy-.042*s0,z-.20*s0],[x-.16*s0,wy+.042*s0,z-.20*s0],.105*s0,'#614529',14);v8cylinder(m,[x+.19*s0,wy-.042*s0,z-.20*s0],[x+.19*s0,wy+.042*s0,z-.20*s0],.105*s0,'#614529',14)}v8cylinder(m,[x,y,z+.03*s0],[x,y+side*span,z+.03*s0],r,'#323b41',12);v8cylinder(m,[x,y+side*span,z+.03*s0],[x,y+side*(span+.07*s0),z+.03*s0],r*1.11,'#2b3338',12);v8seg(m,[x-.23*s0,y,z+.04*s0],[x+.23*s0,y,z+.04*s0],'#b08c56',.8);
+};
+function v20CoastMesh(){let m=v8mesh();const c='#6f846a';v8cube(m,0,0,-.8,46,18,1.4,'#8c9877');v8cube(m,0,-8,.10,46,2,1.1,'#d3bb90');for(let j=-4;j<=4;j++){const x=j*4.8;v8cylinder(m,[x,4,.2],[x,4,1.8],.24,'#6e5034',7);v8cylinder(m,[x,4,1.8],[x,4,3.2+(j%3)*.3],.7,'#3f674e',9)}v8cube(m,15,-1,.7,5,4,2.1,'#b2a188');v8cube(m,15,-1,2.15,5.8,4.8,.6,'#745b48');v8cube(m,-12,-3,.7,3,3,2.0,'#af9c80');v8cylinder(m,[-12,-3,1.7],[-12,-3,5.5],.42,'#bdb0a1',8);v8cube(m,-12,-3,5.2,1.2,1.2,.45,'#b5a26c');return m}
+const v20CoastMeshBase=v8meshFor;v8meshFor=function(entity){if(entity.kind==='coast'){const key='v20coast';if(!V8_MESH_CACHE[key])V8_MESH_CACHE[key]=v20CoastMesh();return V8_MESH_CACHE[key]}return v20CoastMeshBase(entity)};
+function v20ShowModules(){v15Open('fleet')}
+function v20EnsureNavies(){const state=V20_STATE();if(!state||state.naviesInitialized)return;state.naviesInitialized=true;
+ for(let f=0;f<F.length;f++){if(f===s.player||s.fleets.some(x=>x.f===f))continue;const port=N.map((n,i)=>({n,i,p:s.provinces[i]})).filter(x=>x.n.port&&x.p.owner===f).sort((a,b)=>((b.p.line||0)*3+(b.p.frigate||0)*2+(b.p.sloop||0))-((a.p.line||0)*3+(a.p.frigate||0)*2+(a.p.sloop||0)))[0];if(!port)continue;const shipsCount=Math.min(3,(port.p.sloop||0)+(port.p.frigate||0)+(port.p.line||0));if(shipsCount<1)continue;const fleet={id:++s.v6seq,f,name:`${F[f].name}: эскадра ${port.n.name}`,port:port.i,admiral:f%V6_ADMIRALS.length,embarked:[],formation:'line',provisions:130,seaMorale:80};s.fleets.push(fleet);
+ const types=[];for(const [k,c] of [['line',port.p.line||0],['frigate',port.p.frigate||0],['sloop',port.p.sloop||0]])for(let j=0;j<Math.min(3,c);j++)types.push(k);
+ for(const type of types.slice(0,shipsCount)){const h=V6_HULLS[type],design={f,type,name:`Проект ${h.label}`,modelSeed:f*101+shipsCount,modules:{},batteries:h.decks.map((dk,j)=>({gun:type==='line'?'gun12':type==='frigate'?'gun9':'gun4',count:Math.min(dk.max,type==='line'?16:type==='frigate'?12:6)}))};const st=v6designStats(design);s.ships.push({id:++s.v6seq,f,name:`${F[f].name}: ${h.label} №${s.v6seq%100}`,type,design,port:port.i,fleetId:fleet.id,hp:st.hp,maxHp:st.hp,crew:Math.round(h.crew*.83),crewMax:h.crew,ammo:80,crewSkills:{sailing:25+f%20,gunnery:22+f%15}});}
+ }
+}
+function v20StartContact(){if(!s)return;const v=V20_STATE();if(!v.contact)return;const contact=v.contact,ours=s.fleets.find(x=>x.id===contact.ours),theirs=s.fleets.find(x=>x.id===contact.theirs);if(!ours||!theirs||!v8shipsOf(ours).length||!v8shipsOf(theirs).length){v.contact=null;return say('Контакт потерян')};if(!withWar(ours.f,theirs.f))return say('Для атаки нейтральной эскадры сначала требуется объявить войну.');v.contact=null;v20ContactOverlay();v8Open3DBattle('sea',true,{fleet:ours,enemyFleet:theirs,openSea:true,to:theirs.port,contactId:contact.id});}
+function v20IgnoreContact(){const state=V20_STATE();const c=state.contact;if(c){state.seen[c.id]=(s.year||1700)*400+(s.month||1)*31+(s.day||1)+30;state.contact=null;v20ContactOverlay();}}
+function v20ContactOverlay(){let el=document.getElementById('v20-alert');if(!el){el=document.createElement('div');el.id='v20-alert';document.body.appendChild(el)}const c=s?.v20?.contact;if(!c){el.classList.remove('visible');el.innerHTML='';return;}const ours=s.fleets.find(x=>x.id===c.ours),theirs=s.fleets.find(x=>x.id===c.theirs);if(!ours||!theirs){el.classList.remove('visible');return}const war=withWar(ours.f,theirs.f);el.innerHTML=`<div class="v20-alert-top"><strong>⚑ Обнаружена эскадра</strong><button onclick="v20IgnoreContact()">✕</button></div><div class="v20-contacts"><div><b>${esc(ours.name)}</b><span>${v8shipsOf(ours).length} корабля · организация ${v20ShipOrganization(ours).value}%</span></div><span>≈</span><div><b>${esc(theirs.name)}</b><span>${v8shipsOf(theirs).length} корабля · ${war?'ВРАГ':'нейтралитет'}</span></div></div><p>Морской контакт у ${esc(N[c.coast]?.name||'побережья')}. Время остановлено, доступен тактический переход.</p><div class="v20-alert-actions"><button onclick="v20IgnoreContact()">Продолжить маршрут</button><button onclick="v20StartContact()" ${war?'':'disabled'}>Командовать боем — 3D</button></div>`;el.classList.add('visible')}
+function v20ScanContact(){const v=V20_STATE();if(!v||v.contact)return;const orders=v8get().seaOrders.filter(o=>o.f===s.player&&o.remaining>0);if(!orders.length)return;const now=(s.year||1700)*400+(s.month||1)*31+(s.day||1);const rivals=s.fleets.filter(x=>x.f!==s.player&&x.port!=null&&v8shipsOf(x).length>0);for(const o of orders){const player=s.fleets.find(x=>x.id===o.fleetId);if(!player||!v8shipsOf(player).length||!o.position)continue;const skill=v20ShipOrganization(player);for(const other of rivals){const pt=N[other.port];if(!pt)continue;const d=Math.hypot(o.position.x-pt.x,o.position.y-pt.y),spotMod=v8shipsOf(player).reduce((p,sh)=>p*v20ShipMod(sh,'spotting'),1)**(1/Math.max(1,v8shipsOf(player).length));if(d>26*spotMod*(.6+skill.value/130))continue;let id=[player.id,other.id].join('/');if((v.seen[id]||0)>now)continue;v.contact={id,ours:player.id,theirs:other.id,coast:other.port};pauseGame();v20ContactOverlay();log(`Наблюдатели эскадры «${player.name}» обнаружили суда государства ${F[other.f].name}.`);return;}}}
+function v20TacticalDrill(id){const fleet=s.fleets.find(x=>x.id===id&&x.f===s.player);if(!fleet||!v8shipsOf(fleet).length)return say('Для учений нужны реальные корабли в эскадре');v8Open3DBattle('sea',false,{fleet,drill:true});}
+const v20OpenOriginal=v8Open3DBattle;
+v8Open3DBattle=function(kind='sea',campaign=false,context=null){v20OpenOriginal(kind,campaign,context);if(kind!=='sea'||!V8_SCENE||!v8Battle)return;
+ const sc=V8_SCENE,fl=context?.fleet||s.fleets.find(x=>x.f===s.player),hostile=context?.enemyFleet; if(hostile){const real=v8shipsOf(hostile);sc.units=sc.units.filter(u=>u.team==='friendly').concat(real.slice(0,6).map((sh,i)=>({id:100+i,shipId:sh.id,kind:'ship',type:sh.type,design:sh.design,pos:[25,i*11-10,0],angle:Math.PI,hp:sh.hp,maxHp:sh.maxHp,team:'enemy',name:sh.name,cooldown:3+i,turn:0,ammo:sh.ammo||80,firepower:v6shipPower(sh,hostile.admiral)})));}
+ if(context?.drill)document.querySelector('#v8-window .v8-w-header small')?.replaceChildren(document.createTextNode('УЧЕБНОЕ СРАЖЕНИЕ · без потерь кампании'));
+ v8Battle.v20={squadron:fl,formation:fl?.formation||'line',commands:[],timeScale:.5,order:'hold',coast:context?.to,enemyFleet:hostile||null};
+ sc.units.filter(u=>u.kind==='ship').forEach((u,i)=>{const real=s.ships.find(sh=>sh.id===u.shipId);u.knots=real?v20VesselSpeed(real):8;u.desiredHeading=u.angle;u.actualSpeed=u.knots;u.targetSpeed=u.knots;u.ammo=real?.ammo??80;u.lineOffset=i;u.commandAt=0;});
+ if(context?.openSea&&context?.to!=null&&N[context.to]?.port)sc.units.push({id:800,kind:'coast',pos:[16,-65,0],angle:0,hp:999,maxHp:999,team:'neutral',name:'Прибрежье'});
+ const panel=document.getElementById('v8-stage');if(panel){let ctrl=document.createElement('div');ctrl.className='v20-tactical-controls';ctrl.id='v20-tactical-controls';ctrl.innerHTML=`<span>УПРАВЛЕНИЕ БОЕМ</span><button onclick="v8battleCommand('pause')">Ⅱ / ▶</button><button onclick="v8battleCommand('left')">↶ Курс</button><button onclick="v8battleCommand('right')">↷ Курс</button><button onclick="v8battleCommand('fire')">Бортовой залп</button><button onclick="v8battleCommand('sail')">Паруса</button><button onclick="v20BattleSpeed(.25)">¼×</button><button class="sel" onclick="v20BattleSpeed(.5)">½×</button><button onclick="v20BattleSpeed(1)">1×</button><button onclick="v20BattleSpeed(2)">2×</button><button onclick="v20BattleOrder('line')">Держать линию</button><button onclick="v20BattleOrder('chase')">Преследовать</button><button onclick="v20BattleOrder('retreat')">Отходить</button><button onclick="v20BeachLanding()" ${!fl?.embarked?.length?'disabled':''}>Высадить десант</button>`;panel.appendChild(ctrl);}
+ v20BattleHud();
+};
+function v20BattleSpeed(x){if(!v8Battle?.v20)return;v8Battle.v20.timeScale=x;document.querySelectorAll('#v20-tactical-controls button').forEach(b=>b.classList.toggle('sel',b.textContent===(x===.25?'¼×':x===.5?'½×':x+'×')))}
+function v20OrderLatency(u){const sh=s.ships.find(x=>x.id===u.shipId),fl=v8Battle?.v20?.squadron,o=v20ShipOrganization(fl);return o.delay*(sh?v20ShipMod(sh,'commandDelay')/Math.max(.6,globalMod(sh.f,'commandDelay')):1)}
+function v20QueueOrder(u,cmd,extra){if(!u||!v8Battle?.v20)return;const b=v8Battle.v20;const when=(V8_SCENE?.time||0)+v20OrderLatency(u);b.commands.push({id:u.id,cmd,extra,when});v8Battle.lastHit=`Приказ «${cmd}» передан · задержка ${Math.round(when-V8_SCENE.time)} с`;v20BattleHud()}
+function v20BattleOrder(kind){const sc=V8_SCENE,b=v8Battle?.v20;if(!b||!sc)return;b.order=kind;if(kind==='line')b.formation='line';for(const u of sc.units.filter(x=>x.team==='friendly'&&x.kind==='ship'&&x.hp>0))v20QueueOrder(u,kind);v20BattleHud()}
+const v20OldCommand=v8battleCommand;
+v8battleCommand=function(cmd){if(!v8Battle?.v20||V8_SCENE?.kind!=='sea')return v20OldCommand(cmd);if(cmd==='pause')return v20OldCommand(cmd);if(cmd==='sail'){v8Battle.sails=!v8Battle.sails;return;}const unit=v8select3dUnit();if(!unit)return;if(['left','right','fire'].includes(cmd))return v20QueueOrder(unit,cmd);return v20OldCommand(cmd)};
+function v20BattleHud(){const b=v8Battle?.v20;const hud=document.getElementById('v8-battle-hud');if(!b||!hud)return;const o=v20ShipOrganization(b.squadron),alive=V8_SCENE?.units.filter(x=>x.hp>0&&x.team==='friendly')||[];hud.innerHTML=`<b>ОРГАНИЗАЦИЯ ${o.value}/100</b> · задержка команды ${o.delay} с · строй: ${V20_FORMATIONS[b.formation]?.name||'линия'} · скорость боя ×${b.timeScale} · ${alive.length} кораблей · ${b.commands.length} ожидающих приказов`}
+const v20OriginalStep=v8sceneStep;
+v8sceneStep=function(rawDt){const sc=V8_SCENE,b=v8Battle?.v20;if(!b||sc?.kind!=='sea')return v20OriginalStep(rawDt);if(sc.paused)return;const dt=rawDt*b.timeScale;sc.time+=dt;if(v8Battle)v8Battle.elapsed+=dt;for(const item of [...b.commands]){if(sc.time<item.when)continue;const u=sc.units.find(x=>x.id===item.id);if(!u||u.hp<=0){b.commands.splice(b.commands.indexOf(item),1);continue}if(item.cmd==='heading'){u.desiredHeading=item.extra.angle;u.order='manual'}else if(item.cmd==='left'){u.desiredHeading-=Math.PI/6;u.order='manual'}else if(item.cmd==='right'){u.desiredHeading+=Math.PI/6;u.order='manual'}else if(item.cmd==='fire'){if(u.cooldown<=0)v8fire(u)}else if(item.cmd==='retreat'){u.targetSpeed=u.knots;u.desiredHeading=Math.PI;u.order='retreat'}else if(item.cmd==='chase'){u.order='chase';u.targetSpeed=u.knots}else if(item.cmd==='line'){u.order='line';u.targetSpeed=u.knots*.82};b.commands.splice(b.commands.indexOf(item),1)}
+ const friendly=sc.units.filter(x=>x.kind==='ship'&&x.team==='friendly'&&x.hp>0), enemy=sc.units.filter(x=>x.kind==='ship'&&x.team==='enemy'&&x.hp>0),lead=friendly[0];
+ for(const u of [...friendly,...enemy]){u.cooldown=Math.max(0,(u.cooldown||0)-dt);let real=s.ships.find(x=>x.id===u.shipId);if(real)u.knots=v20VesselSpeed(real);let speed=(u.knots||8)*(u.hp/Math.max(1,u.maxHp))**.25;
+ if(u.team==='friendly'){if(u.order==='line'&&lead&&u!==lead){const idx=friendly.indexOf(u),gap=(V20_FORMATIONS[b.formation]?.spacing||11),o=v20ShipOrganization(b.squadron);speed*=v26Station(u,lead,idx,gap,o.hold,b.squadron?.f??s.player);}if(u.order==='chase'&&enemy.length){const tgt=enemy.reduce((a,x)=>Math.hypot(x.pos[0]-u.pos[0],x.pos[1]-u.pos[1])<Math.hypot(a.pos[0]-u.pos[0],a.pos[1]-u.pos[1])?x:a,enemy[0]);u.desiredHeading=Math.atan2(tgt.pos[1]-u.pos[1],tgt.pos[0]-u.pos[0]);}if(v8Battle.sails===false)speed*=.48;}
+ else if(friendly.length){v26EnemyTactics(u,friendly,enemy)}
+ speed*=v27Sailing(u,real);const diff=Math.atan2(Math.sin((u.desiredHeading??u.angle)-u.angle),Math.cos((u.desiredHeading??u.angle)-u.angle));const turning=(real?v20ShipMod(real,'turnRate'):1)*(V20_FORMATIONS[u.team==='friendly'?b.formation:'line']?.turn||1);u.angle+=Math.max(-dt*.18*turning,Math.min(dt*.18*turning,diff));u.actualSpeed+=(speed-u.actualSpeed)*Math.min(1,dt*.6);u.pos[0]+=Math.cos(u.angle)*u.actualSpeed*dt*.105;u.pos[1]+=Math.sin(u.angle)*u.actualSpeed*dt*.105;
+ u.pos[0]=Math.max(-180,Math.min(180,u.pos[0]));u.pos[1]=Math.max(-150,Math.min(150,u.pos[1]));}
+ sc.smoke=sc.smoke.filter(x=>x.age<1.7);for(const x of sc.smoke)x.age+=dt;
+ if(Math.floor(sc.time*2)!==Math.floor((sc.time-dt)*2)){v20BattleHud();for(const btn of document.querySelectorAll('#v8-unit-strip button[data-unit]')){const u=sc.units.find(x=>x.id===+btn.dataset.unit),e=btn.querySelector('.v10-unit-health>i');if(u&&e)e.style.width=Math.max(0,100*u.hp/Math.max(1,u.maxHp))+'%'}}
+ if(friendly.length===0||enemy.length===0)v8finish3dBattle(!!friendly.length);
+};
+const v20OldFinish=v8finish3dBattle;
+v8finish3dBattle=function(won){const b=v8Battle,sc=V8_SCENE;if(!b?.campaign||!b.context?.openSea||!sc)return v20OldFinish(won);for(const unit of sc.units){if(!unit.shipId)continue;const ship=s.ships.find(x=>x.id===unit.shipId);if(ship){ship.hp=Math.max(0,Math.round(unit.hp));ship.ammo=Math.max(0,Math.round(unit.ammo??ship.ammo??100));ship.crew=Math.max(0,Math.round(ship.crew*(.74+.26*ship.hp/Math.max(1,ship.maxHp))))}}const destroyed=s.ships.filter(x=>x.hp<=0);for(const sh of destroyed)log(`Потерян корабль «${sh.name}»`);s.ships=s.ships.filter(x=>x.hp>0);let f=b.context.fleet,enemy=b.context.enemyFleet;if(f){f.seaMorale=Math.max(10,Math.min(100,(f.seaMorale??75)+(won?5:-12)));}V20_STATE().fleetReports.unshift({date:dateLabel(),ours:f?.name||'',other:enemy?.name||'',won});v8Stop3D();v8close();drawAll();say(won?'Контакт завершён: победа. Повреждения сохранены.':'Эскадра отошла. Повреждения сохранены.');};
+function v20BeachLanding(){const b=v8Battle?.v20,fl=b?.squadron,to=b?.coast;if(!b||!fl||!fl.embarked?.length||to==null)return say('Для высадки нужны транспорты с полками и участок побережья');if(!N[to]?.port)return say('Нет доступного берегового района');if(!withWar(fl.f,s.provinces[to].owner))return say('Высадка на нейтральный берег требует отдельного дипломатического разрешения');if(b.landed)return say('Десант уже высажен');b.landed=true;v8amphibiousAssault(fl,to);v20BattleHud();say(`Десантная операция у ${N[to].name}: результат внесён в кампанию`)}
+const v20OldFresh=fresh;
