@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "site.zip"
+      - "tools/**"
+      - "tests/**"
       - "game-v27/**"
       - ".github/workflows/publish.yml"
   workflow_dispatch:
@@ -27,23 +28,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Reconstruct and verify game
+      - name: Build cacheable game assets
         run: |
-          mkdir -p public
-          if [ -d game-v27 ]; then
-            test "$(find game-v27 -maxdepth 1 -name 'part-*.html' | wc -l)" -eq 24
-            cat game-v27/part-*.html > public/index.html
-            echo "16f929033c537c2291776316ae392dde94cb2f8c6c059c307dec66099521fbc3  public/index.html" | sha256sum -c -
-            echo 'XXVII deployed with verified original contents.'
-          else
-            unzip -q site.zip -d public
-            test -s public/index.html
-            test -s public/scripts/game.js
-            test -s public/scripts/geography.js
-            test -s public/styles.css
-            test -d public/assets/images
-          fi
-          touch public/.nojekyll
+          python3 tools/split_site.py
+          python3 tests/check_build.py
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:
@@ -51,7 +39,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: public
+          path: dist
       - name: Deploy site
         id: deployment
         uses: actions/deploy-pages@v4
