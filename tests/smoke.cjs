@@ -14,7 +14,7 @@ const { chromium } = require('playwright');
       await page.locator('#eos-loading').waitFor({state:'detached',timeout:90000});
       await page.locator('#goStart').click();
       await page.evaluate(()=>{
-        if(N.length!==3399||TECH.length!==371)throw Error('Missing game data');
+        if(N.length!==3399||TECH.length!==375)throw Error('Missing game data');
         v24Panel('research');
       });
       await page.locator('.v24-start').click();

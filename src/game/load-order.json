@@ -18,6 +18,9 @@
     "src/game/initialization/06.js",
     "src/game/initialization/07.js",
     "src/game/initialization/08.js",
+    "src/game/updates/fleet-readiness.js",
+    "src/game/updates/logistics.js",
+    "src/game/updates/presentation.js",
     "src/game/boot.js"
   ]
 }
