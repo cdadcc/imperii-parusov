@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "files": [
+    "src/game/core.js",
+    "src/game/map.js",
+    "src/game/fleet.js",
+    "src/game/army.js",
+    "src/game/economy.js",
+    "src/game/research.js",
+    "src/game/interface.js",
+    "src/game/rendering.js",
+    "src/game/initialization/00.js",
+    "src/game/initialization/01.js",
+    "src/game/initialization/02.js",
+    "src/game/initialization/03.js",
+    "src/game/initialization/04.js",
+    "src/game/initialization/05.js",
+    "src/game/initialization/06.js",
+    "src/game/initialization/07.js",
+    "src/game/initialization/08.js",
+    "src/game/boot.js"
+  ]
+}

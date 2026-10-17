@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "tools/**"
+      - "src/**"
       - "tests/**"
       - "game-v27/**"
       - ".github/workflows/publish.yml"

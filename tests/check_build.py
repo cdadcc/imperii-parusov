@@ -11,7 +11,7 @@ out = root/'dist'
 r = json.loads((out/'build-report.json').read_text())
 original = b''.join(p.read_bytes() for p in sorted((root/'game-v27').glob('part-*.html'))).decode()
 source_script = re.search(r'<script>(.*?)</script>', original, re.S).group(1)
-restored = (out/r['game']).read_text()
+restored = (root/'.build/audit-game.js').read_text()
 for name, spec in r['datasets'].items():
     raw = (out/spec['plain']).read_bytes()
     assert gzip.decompress((out/spec['packed']).read_bytes()) == raw
@@ -28,6 +28,16 @@ assert (out/r['css']).read_text() == '\n'.join(re.findall(r'<style>(.*?)</style>
 for path, size in r['assets'].items():
     assert (out/path).stat().st_size == size
 assert r['html_bytes'] < 20000
-print('PASS: exact JavaScript, CSS, geography and image-byte preservation')
+print('PASS: archived JavaScript reconstruction, CSS, geography and image bytes')
 print('Compressed map bytes:', sum((out/x['packed']).stat().st_size for x in r['datasets'].values()))
 print('All assets excluding JSON fallbacks:', sum(size for path,size in r['assets'].items() if not path.endswith('.json')))
+
+# Published scripts must exactly match the editable source manifest, in order.
+assert len(r['modules']) == len(r['source_modules'])
+assert r['source_modules'][-1] == 'src/game/boot.js'
+for src, built in zip(r['source_modules'], r['modules']):
+    assert (root/src).read_bytes() == (out/built).read_bytes(), src
+    for path in re.findall(r'assets/images/[A-Za-z0-9_.-]+', (root/src).read_text()):
+        assert (out/path).is_file(), path
+assert r['modules'] != []
+print('PASS: source module order, published bytes and image references')

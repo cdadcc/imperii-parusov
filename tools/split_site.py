@@ -52,7 +52,12 @@ def extract_image(m):
         images[url] = asset('assets/images', 'image', 'jpg' if kind in ('jpeg','jpg') else kind, data)
     return m.group(1) + images[url] + m.group(1)
 script = pattern.sub(extract_image, script)
-game = asset('scripts', 'game', 'js', script.encode())
+(ROOT/'.build').mkdir(exist_ok=True)
+(ROOT/'.build/audit-game.js').write_text(script, encoding='utf-8')
+game = None
+order = json.loads((ROOT/'src/game/load-order.json').read_text())['files']
+modules = [asset('scripts', Path(path).stem, 'js', (ROOT/path).read_bytes()) for path in order]
+
 loader = '''(async () => {
   const status = document.getElementById('eos-loading-status');
   try {
@@ -75,16 +80,21 @@ loader = '''(async () => {
       window.__EOS_DATA[name] = await read(spec);
     }));
     status.textContent = 'Запускаем игру…';
-    const script = document.createElement('script');
-    script.src = GAME;
-    script.onload = () => document.getElementById('eos-loading').remove();
-    script.onerror = () => { status.textContent = 'Не удалось загрузить игру. Обновите страницу.'; };
-    document.body.appendChild(script);
+    await Promise.all(MODULES.map(src => new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.async = false; // Classic globals and explicit insertion order preserve initialization.
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Module failed: ' + src));
+      document.body.appendChild(script);
+    })));
+    document.getElementById('eos-loading').remove();
+    delete window.__EOS_DATA;
   } catch (error) {
     status.textContent = 'Не удалось загрузить карту. Проверьте соединение и обновите страницу.';
     console.error(error);
   }
-})();'''.replace('DATASETS', json.dumps(datasets)).replace('GAME', json.dumps(game))
+})();'''.replace('DATASETS', json.dumps(datasets)).replace('MODULES', json.dumps(modules))
 loader_path = asset('scripts', 'loader', 'js', loader.encode())
 html = html.replace(match.group(0), f'<script src="{loader_path}" defer></script>')
 html = html.replace('</head>', f'<link rel="stylesheet" href="{css}"></head>')
@@ -94,6 +104,6 @@ assert 'id="eos-loading"' in html
 (OUT/'index.html').write_text(html, encoding='utf-8')
 (OUT/'original.html').unlink()
 (OUT/'.nojekyll').touch()
-report = {'original_bytes': len(source.encode()), 'html_bytes': len(html.encode()), 'image_count':len(images), 'assets':manifest, 'datasets':datasets, 'game':game, 'loader':loader_path, 'css':css}
+report = {'original_bytes': len(source.encode()), 'html_bytes': len(html.encode()), 'image_count':len(images), 'assets':manifest, 'datasets':datasets, 'game':game, 'modules':modules, 'source_modules':order, 'loader':loader_path, 'css':css}
 (OUT/'build-report.json').write_text(json.dumps(report, indent=2))
 print(json.dumps({k:v for k,v in report.items() if k not in ('assets','datasets')}, indent=2))
