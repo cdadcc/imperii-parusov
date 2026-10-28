@@ -1,13 +1,10 @@
 name: Publish Imperii Parusov
-
 on:
   push:
     branches: [main]
     paths:
-      - "tools/**"
-      - "src/**"
-      - "tests/**"
-      - "game-v27/**"
+      - "site_parts/**"
+      - "site.zip"
       - ".github/workflows/publish.yml"
   workflow_dispatch:
 
@@ -29,10 +26,29 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Build cacheable game assets
+      - name: Assemble latest game and validate JavaScript
+        shell: bash
         run: |
-          python3 tools/split_site.py
-          python3 tests/check_build.py
+          mkdir -p public
+          if test -f site_parts/v27_000.txt; then
+            cat site_parts/v27_*.txt > public/index.html
+            python3 - <<'PY'
+          from pathlib import Path
+          html=Path("public/index.html").read_text(encoding="utf-8")
+          a=html.find("<script>")
+          b=html.rfind("</script>")
+          assert a>=0 and b>a, "Missing game script"
+          assert "const GEO=" in html and "const V25_GEO=" in html, "Missing geographic data"
+          Path("/tmp/imperii-game.js").write_text(html[a+len("<script>"):b], encoding="utf-8")
+          print("V27 game assembled; characters:",len(html))
+          PY
+            node --check /tmp/imperii-game.js
+          elif test -f site.zip; then
+            unzip -q site.zip -d public
+            test -s public/index.html
+          else
+            echo "Missing game content" >&2; exit 1
+          fi
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:
@@ -40,7 +56,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: dist
+          path: public
       - name: Deploy site
         id: deployment
         uses: actions/deploy-pages@v4
